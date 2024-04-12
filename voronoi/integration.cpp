@@ -2,7 +2,6 @@
 #include <vector>
 #include <cmath>
 #include <numeric>
-#include <functional>
 #include <tuple>
 #include <Eigen/Dense>
 #include <boost/math/quadrature/gauss_kronrod.hpp>
@@ -17,11 +16,14 @@ VectorXd mean(3); // Mean vector
 MatrixXd covariance(3, 3); // Covariance matrix
 
 // Multivariate Gaussian PDF in R^3
-double multivariate_gaussian_pdf(double x, double y, double z) {
+VectorXd multivariate_gaussian_pdf(double x, double y, double z) {
     Vector3d point(x, y, z);
-    double exponent = -0.5 * (point - mean).transpose() * covariance.inverse() * (point - mean);
+    Vector3d diff = point - mean;
+    double exponent = -0.5 * diff.transpose() * covariance.inverse() * diff;
     double normalization = pow(2 * boost::math::constants::pi<double>(), -mean.size() / 2) * sqrt(covariance.determinant());
-    return normalization * exp(exponent);
+    VectorXd density(3);
+    density << normalization * exp(exponent), 0, 0; // Return a vector with the density for each component (in this case, just one component)
+    return density;
 }
 
 // Define polyhedron volume
@@ -34,7 +36,7 @@ double polyhedron_volume(vector<Vector3d>& vertices) {
 }
 
 // Integrate multivariate Gaussian PDF over the polyhedron
-double integrate_multivariate_gaussian_pdf_over_polyhedron(std::function<double(double, double, double)> pdf_func, vector<Vector3d>& vertices) {
+VectorXd integrate_multivariate_gaussian_pdf_over_polyhedron(std::function<VectorXd(double, double, double)> pdf_func, vector<Vector3d>& vertices) {
     // Compute the volume of the polyhedron
     double polyhedron_vol = polyhedron_volume(vertices);
 
@@ -65,12 +67,10 @@ double integrate_multivariate_gaussian_pdf_over_polyhedron(std::function<double(
         };
         return integrator.integrate(integrator_func_y, ymin, ymax);
     };
-    double result = integrator.integrate(integrator_func, zmin, zmax);
-
-    // Multiply the result by the volume of the polyhedron
-    return result * polyhedron_vol;
+    VectorXd result(3);
+    result << integrator.integrate(integrator_func, zmin, zmax), 0, 0; // Return a vector with the result for each component
+    return result * polyhedron_vol; // Multiply each component by the volume of the polyhedron
 }
-// =======================================
 
 int main() {
     // Set mean and covariance of the multivariate Gaussian PDF
@@ -81,8 +81,8 @@ int main() {
     vector<Vector3d> vertices = {Vector3d(0, 0, 0), Vector3d(1, 0, 0), Vector3d(0, 1, 0), Vector3d(0, 0, 1)};
     
     // Integrate the multivariate Gaussian PDF over the polyhedron
-    double volume = integrate_multivariate_gaussian_pdf_over_polyhedron(multivariate_gaussian_pdf, vertices);
-    cout << "Volume: " << volume << endl;
+    VectorXd volume = integrate_multivariate_gaussian_pdf_over_polyhedron(multivariate_gaussian_pdf, vertices);
+    cout << "Volume: " << volume.transpose() << endl;
 
     return 0;
 }
