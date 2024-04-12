@@ -35,13 +35,10 @@ double polyhedron_volume(vector<Vector3d>& vertices) {
     return mat.jacobiSvd().singularValues().prod() / 6.0; // Using SVD to compute the volume of a tetrahedron
 }
 
-// Integrate multivariate Gaussian PDF over the polyhedron
-VectorXd integrate_multivariate_gaussian_pdf_over_polyhedron(std::function<VectorXd(double, double, double)> pdf_func, vector<Vector3d>& vertices) {
+// Integrate vector-valued PDF over the polyhedron
+VectorXd integrate_vector_valued_pdf_over_polyhedron(std::function<VectorXd(double, double, double)> pdf_func, vector<Vector3d>& vertices) {
     // Compute the volume of the polyhedron
     double polyhedron_vol = polyhedron_volume(vertices);
-
-    // Define the function to integrate
-    auto integrand = [pdf_func](double x, double y, double z) { return pdf_func(x, y, z); }; // Capture by value
 
     // Define the integration limits
     double xmin = numeric_limits<double>::infinity(), xmax = -numeric_limits<double>::infinity();
@@ -56,20 +53,23 @@ VectorXd integrate_multivariate_gaussian_pdf_over_polyhedron(std::function<Vecto
         zmax = max(zmax, vertex(2));
     }
 
-    // Perform the triple integral over the polyhedron using Gauss-Kronrod quadrature
-    bmq::gauss_kronrod<double, 15> integrator;
-    auto integrator_func = [&](double z) {
-        auto integrator_func_y = [&](double y) {
-            auto integrator_func_x = [&](double x) {
-                return integrand(x, y, z);
-            };
-            return integrator.integrate(integrator_func_x, xmin, xmax);
-        };
-        return integrator.integrate(integrator_func_y, ymin, ymax);
-    };
+    // Perform the triple integral over the polyhedron for each component separately
     VectorXd result(3);
-    result << integrator.integrate(integrator_func, zmin, zmax), 0, 0; // Return a vector with the result for each component
-    return result * polyhedron_vol; // Multiply each component by the volume of the polyhedron
+    for (int i = 0; i < 3; ++i) {
+        auto integrator_func = [&](double z) {
+            auto integrator_func_y = [&](double y) {
+                auto integrator_func_x = [&](double x) {
+                    return pdf_func(x, y, z)(i); // Extract the ith component
+                };
+                return bmq::gauss_kronrod<double, 15>().integrate(integrator_func_x, xmin, xmax);
+            };
+            return bmq::gauss_kronrod<double, 15>().integrate(integrator_func_y, ymin, ymax);
+        };
+        result(i) = bmq::gauss_kronrod<double, 15>().integrate(integrator_func, zmin, zmax);
+    }
+
+    // Multiply each component by the volume of the polyhedron
+    return result * polyhedron_vol;
 }
 
 int main() {
@@ -80,9 +80,9 @@ int main() {
     // Example usage: define the vertices of a tetrahedron
     vector<Vector3d> vertices = {Vector3d(0, 0, 0), Vector3d(1, 0, 0), Vector3d(0, 1, 0), Vector3d(0, 0, 1)};
     
-    // Integrate the multivariate Gaussian PDF over the polyhedron
-    VectorXd volume = integrate_multivariate_gaussian_pdf_over_polyhedron(multivariate_gaussian_pdf, vertices);
-    cout << "Volume: " << volume.transpose() << endl;
+    // Integrate the vector-valued PDF over the polyhedron
+    VectorXd result = integrate_vector_valued_pdf_over_polyhedron(multivariate_gaussian_pdf, vertices);
+    cout << "Result: " << result.transpose() << endl;
 
     return 0;
 }
