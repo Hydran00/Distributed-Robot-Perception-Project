@@ -26,6 +26,14 @@ VectorXd multivariate_gaussian_pdf(double x, double y, double z) {
     return density;
 }
 
+// Product of [x, y, z] and the result of multivariate_gaussian_pdf(x, y, z)
+VectorXd product_pdf(double x, double y, double z) {
+    VectorXd pdf = multivariate_gaussian_pdf(x, y, z);
+    VectorXd result = VectorXd::Zero(3);
+    result << x * pdf(0), y * pdf(0), z * pdf(0); // Element-wise product with [x, y, z]
+    return result;
+}
+
 // Define polyhedron volume
 double polyhedron_volume(vector<Vector3d>& vertices) {
     MatrixXd mat(3, vertices.size());
@@ -80,8 +88,8 @@ int main() {
     // Example usage: define the vertices of a tetrahedron
     vector<Vector3d> vertices = {Vector3d(0, 0, 0), Vector3d(1, 0, 0), Vector3d(0, 1, 0), Vector3d(0, 0, 1)};
     
-    // Integrate the vector-valued PDF over the polyhedron
-    VectorXd result = integrate_vector_valued_pdf_over_polyhedron(multivariate_gaussian_pdf, vertices);
+    // Integrate the product of vector-valued PDF over the polyhedron
+    VectorXd result = integrate_vector_valued_pdf_over_polyhedron(product_pdf, vertices);
     cout << "Result: " << result.transpose() << endl;
 
     return 0;
