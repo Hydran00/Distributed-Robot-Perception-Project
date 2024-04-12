@@ -12,6 +12,8 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
   sensor_msgs
   PCL
   pcl_conversions
+  pcl_ros
+  tf2_ros
 )
 
 # find dependencies
@@ -27,14 +29,14 @@ include_directories(pointcloud_accumulator ${PCL_INCLUDE_DIRS})
 link_directories(pointcloud_accumulator ${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-ament_target_dependencies(pointcloud_accumulator pcl_conversions rclcpp sensor_msgs)
+ament_target_dependencies(pointcloud_accumulator pcl_ros pcl_conversions rclcpp sensor_msgs tf2_ros)
 
 target_link_libraries(pointcloud_accumulator ${PCL_LIBRARIES}) 
 
 INSTALL (TARGETS pointcloud_accumulator
   DESTINATION lib/${PROJECT_NAME}
 )
-INSTALL (DIRECTORY launch rviz
+INSTALL (DIRECTORY launch rviz_config
   DESTINATION share/${PROJECT_NAME}
 )
 
