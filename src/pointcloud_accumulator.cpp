@@ -109,7 +109,7 @@ private:
         }
         try
         {
-            transform_ = tf_buffer.lookupTransform("world", "1_camera", tf2::TimePointZero);
+            transform_ = tf_buffer.lookupTransform(target_frame, in.header.frame_id, in.header.stamp);
         }
         catch (tf2::TransformException &ex)
         {
@@ -130,7 +130,6 @@ private:
 
     void filterPointCloud()
     {
-        RCLCPP_INFO(this->get_logger(), "Size is %d", (int)total_cloud_->size());
         if ((int)total_cloud_->size() > max_cloud_size_)
         {
             // Apply VoxelGrid filter
@@ -141,6 +140,7 @@ private:
             // random sampling filter
             random_sample.setInputCloud(total_cloud_);
             random_sample.setSample(max_cloud_size_);
+            random_sample.filter(*total_cloud_);
         }
     }
 
