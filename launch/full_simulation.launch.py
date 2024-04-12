@@ -23,6 +23,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{"use_sim_time": True},
                     {'voxel_grid_size': 0.01},
+                    {'max_cloud_size': 100000},
                     {'input_topic_1': '/cloud_out_1'},
                     {'input_topic_2': '/cloud_out_2'},
                     {'output_topic': '/total_cloud'},
@@ -30,7 +31,7 @@ def generate_launch_description():
                     ]
     )
     
-    rviz_config = os.path.join(get_package_share_directory('project'), 'rviz','robot.rviz')
+    rviz_config = os.path.join(get_package_share_directory('project'), 'rviz_config','rviz.rviz')
     rviz = Node(
         package="rviz2",
         executable="rviz2",
@@ -39,10 +40,12 @@ def generate_launch_description():
         arguments=["-d", rviz_config],
         parameters=[{"use_sim_time": True}]
     )
-    node_list = [
-        pointcloud_accumulator,
-        rviz
-        ]
-    return LaunchDescription([simulation] + node_list)
+    node_list = TimerAction(period=6.0,
+            actions=[
+                pointcloud_accumulator,
+                rviz
+            ])
+
+    return LaunchDescription([simulation] + [node_list])
 
 
