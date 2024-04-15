@@ -14,6 +14,9 @@
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include "tf2/transform_datatypes.h"
+#include "tf2/convert.h"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 // 1) integrate voro++ so that we can obtain vertices of the polyhedrons starting from robot pose
 // 2) publish control input to the robot
 using namespace std;
@@ -137,22 +140,21 @@ public:
 
         try
         {
+            // transform vertices in the 1_base_link frame
+            pose_in_1_.header.frame_id = "world";
+            pose_in_1_.pose.position.x = result_1_(0);
+            pose_in_1_.pose.position.y = result_1_(1);
+            pose_in_1_.pose.position.z = result_1_(2);
+            pose_in_1_.header.stamp = this->now();
             transform_1_ = tf_buffer_1_->lookupTransform("1_base_link", "world", tf2::TimePointZero);
-            // apply the transform to the vertices
-            for (auto &vertex : vertices_1_)
-            {
-                transformPoint(vertex, transform_1_);
-            }
+            tf2::doTransform(pose_in_1_, pose_out_1_, transform_1_);
+        
         }
         catch (tf2::TransformException &ex)
         {
             return;
         }
-        geometry_msgs::msg::PoseStamped target_1_;
-        target_1_.pose.position.x = result_1_(0);
-        target_1_.pose.position.y = result_1_(1);
-        target_1_.pose.position.z = result_1_(2);
-        target_pub_1_->publish(target_1_);
+        target_pub_1_->publish(pose_out_1_);
         vertices_1_.clear();
     }
     void callback_2(const geometry_msgs::msg::PoseArray::SharedPtr msg)
@@ -162,37 +164,32 @@ public:
         {
             vertices_2_.push_back(Vector3d(pose.position.x, pose.position.y, pose.position.z));
         }
-        try
-        {
-            transform_2_ = tf_buffer_2_->lookupTransform("2_base_link", "world", tf2::TimePointZero);
-            // apply the transform to the vertices
-            for (auto &vertex : vertices_2_)
-            {
-                transformPoint(vertex, transform_2_);
-            }
-        }
-        catch (tf2::TransformException &ex)
-        {
-            return;
-        }
 
         // Integrate the product of vector-valued PDF over the polyhedron
         result_2_ = integrate_vector_valued_pdf_over_polyhedron(product_pdf, vertices_2_);
         cout << "2 -> Result: " << result_2_.transpose() << endl;
         // publish the result
-        geometry_msgs::msg::PoseStamped target_2_;
-        target_2_.pose.position.x = result_2_(0);
-        target_2_.pose.position.y = result_2_(1);
-        target_2_.pose.position.z = result_2_(2);
-        target_pub_2_->publish(target_2_);
+
+        try
+        {
+            // transform vertices in the 2_base_link frame
+            pose_in_2_.header.frame_id = "world";
+            pose_in_2_.pose.position.x = result_2_(0);
+            pose_in_2_.pose.position.y = result_2_(1);
+            pose_in_2_.pose.position.z = result_2_(2);
+            pose_in_2_.header.stamp = this->now();
+            transform_2_ = tf_buffer_2_->lookupTransform("2_base_link", "world", tf2::TimePointZero);
+            tf2::doTransform(pose_in_2_, pose_out_2_, transform_2_);
+        
+        }
+        catch (tf2::TransformException &ex)
+        {
+            return;
+        }
+        target_pub_2_->publish(pose_out_2_);
         vertices_2_.clear();
     }
-    void transformPoint(Vector3d &point, geometry_msgs::msg::TransformStamped &transform)
-    {
-        Vector3d transformed_point = Vector3d(transform.transform.rotation.x, transform.transform.rotation.y, transform.transform.rotation.z) * point +
-                                     Vector3d(transform.transform.translation.x, transform.transform.translation.y, transform.transform.translation.z);
-        point << transformed_point(0), transformed_point(1), transformed_point(2);
-    }
+
 
 private:
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_1_;
@@ -207,6 +204,9 @@ private:
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_1_, tf_buffer_2_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_1_, tf_listener_2_;
     geometry_msgs::msg::TransformStamped transform_1_, transform_2_;
+    geometry_msgs::msg::PoseStamped pose_in_1_, pose_out_1_;
+    geometry_msgs::msg::PoseStamped pose_in_2_, pose_out_2_;
+
 };
 
 int main(int argc, char *argv[])

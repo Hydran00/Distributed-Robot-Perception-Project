@@ -15,6 +15,8 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
   pcl_conversions
   pcl_ros
   tf2_ros
+  tf2
+  tf2_geometry_msgs
 )
 
 # find dependencies
@@ -56,7 +58,7 @@ ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros)
 ################ Function integrator ##############################
 
 add_executable(integrator src/integration.cpp)
-ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros)
+ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros tf2 tf2_geometry_msgs)
 
 
 
