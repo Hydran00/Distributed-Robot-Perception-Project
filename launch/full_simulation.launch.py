@@ -23,7 +23,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{"use_sim_time": True},
                     {'voxel_grid_size': 0.01},
-                    {'max_cloud_size': 100000},
+                    {'max_cloud_size': 50000},
                     {'input_topic_1': '/cloud_out_1'},
                     {'input_topic_2': '/cloud_out_2'},
                     {'output_topic': '/total_cloud'},
