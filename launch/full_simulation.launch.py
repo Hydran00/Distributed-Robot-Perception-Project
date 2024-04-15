@@ -40,12 +40,14 @@ def generate_launch_description():
         arguments=["-d", rviz_config],
         parameters=[{"use_sim_time": True}]
     )
-    node_list = TimerAction(period=6.0,
+
+    node_list = TimerAction(period=5.0,
             actions=[
                 pointcloud_accumulator,
-                rviz
+                rviz,
+                
             ])
 
-    return LaunchDescription([simulation] + [node_list])
+    return LaunchDescription([simulation])# + [node_list])
 
 

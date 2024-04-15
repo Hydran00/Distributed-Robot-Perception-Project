@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(project LANGUAGES CXX)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)")
-  add_compile_options(-Wall -Wextra)
+  add_compile_options(-Wno-unused-variable)
 endif()
 
 # find dependencies
@@ -34,9 +34,33 @@ ament_target_dependencies(pointcloud_accumulator pcl_ros pcl_conversions rclcpp 
 
 target_link_libraries(pointcloud_accumulator ${PCL_LIBRARIES}) 
 
-INSTALL (TARGETS pointcloud_accumulator
+
+# voronoi integration
+add_executable(voronoi_calculator voronoi/voronoi_calculator.cpp)
+
+find_file(libvoro_include NAMES "voro++/")
+# message(STATUS ${libvoro_include})
+include_directories(${libvoro_include})
+
+find_library(libvoro++_loc NAMES libvoro++.a)
+# message(STATUS ${libvoro++_loc})
+
+add_library(libvoro++ STATIC IMPORTED)
+set_target_properties(libvoro++ PROPERTIES IMPORTED_LOCATION ${libvoro++_loc})
+
+target_link_libraries(voronoi_calculator libvoro++)
+
+ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros)
+
+INSTALL (TARGETS pointcloud_accumulator voronoi_calculator
   DESTINATION lib/${PROJECT_NAME}
 )
+# python executable
+install(PROGRAMS
+  scripts/vis.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 INSTALL (DIRECTORY launch rviz_config
   DESTINATION share/${PROJECT_NAME}
 )

@@ -39,9 +39,17 @@ def generate_launch_description():
         arguments=["-d", rviz_config],
         parameters=[{"use_sim_time": True}]
     )
+    voronoi_calculator = Node(
+        package='project',
+        executable='voronoi_calculator',
+        output='screen',
+        parameters=[{"use_sim_time": True},
+            ]
+    )
     node_list = [
-        pointcloud_accumulator,
-        rviz
+        # pointcloud_accumulator,
+        # rviz
+        voronoi_calculator
         ]
     return LaunchDescription(node_list)
 

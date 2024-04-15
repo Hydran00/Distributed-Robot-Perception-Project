@@ -71,7 +71,7 @@ public:
 
         // initialize filters
         pass_z_local.setFilterFieldName("z");
-        pass_z_local.setFilterLimits(0.0, 1.5);
+        pass_z_local.setFilterLimits(0.0, 1.0);
         pass_z_target.setFilterFieldName("z");
         pass_z_target.setFilterLimits(0.02, 1.0);
 
@@ -110,7 +110,8 @@ private:
     }
     void processPointCloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg, int id)
     {
-        transform_available = getTransform(total_cloud_frame_, msg->header.frame_id, msg->header.stamp, id);
+        // transform_available = getTransform(total_cloud_frame_, msg->header.frame_id, msg->header.stamp, id);
+        transform_available = getTransform(total_cloud_frame_, msg->header.frame_id, tf2::TimePointZero, id);
 
         if (!transform_available)
         {
@@ -150,7 +151,7 @@ private:
     }
 
     bool getTransform(
-        const std::string &target_frame, const ::std::string &source_frame, rclcpp::Time stamp, int id)
+        const std::string &target_frame, const ::std::string &source_frame, const tf2::TimePoint &stamp, int id)
     {
         try
         {

@@ -6,7 +6,8 @@
 #include <Eigen/Dense>
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 #include <boost/math/constants/constants.hpp>
-
+// 1) integrate voro++ so that we can obtain vertices of the polyhedrons starting from robot pose
+// 2) publish control input to the robot
 using namespace std;
 using namespace Eigen;
 namespace bmq = boost::math::quadrature;
