@@ -48,6 +48,6 @@ def generate_launch_description():
                 
             ])
 
-    return LaunchDescription([simulation])# + [node_list])
+    return LaunchDescription([simulation] + [node_list])
 
 
