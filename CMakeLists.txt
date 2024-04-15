@@ -10,6 +10,7 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
   rclcpp
   rclcpp_lifecycle
   sensor_msgs
+  std_srvs
   PCL
   pcl_conversions
   pcl_ros
@@ -29,7 +30,7 @@ include_directories(pointcloud_accumulator ${PCL_INCLUDE_DIRS})
 link_directories(pointcloud_accumulator ${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-ament_target_dependencies(pointcloud_accumulator pcl_ros pcl_conversions rclcpp sensor_msgs tf2_ros)
+ament_target_dependencies(pointcloud_accumulator pcl_ros pcl_conversions rclcpp sensor_msgs std_srvs tf2_ros)
 
 target_link_libraries(pointcloud_accumulator ${PCL_LIBRARIES}) 
 

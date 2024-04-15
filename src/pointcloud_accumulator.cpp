@@ -1,5 +1,8 @@
+// ROS2
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "std_srvs/srv/empty.hpp"
+// PCL
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/random_sample.h>
@@ -8,6 +11,7 @@
 #include <pcl/common/transforms.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/io/ply_io.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
@@ -52,20 +56,24 @@ public:
         point_cloud_subscriber_2_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             input_topic_2_, 1, std::bind(&PointCloudAccumulator::callback2, this, std::placeholders::_1));
 
+        // service for storing the pointcloud
+        point_cloud_dump_service_ = this->create_service<std_srvs::srv::Empty>(
+            "point_cloud_dump", std::bind(&PointCloudAccumulator::pointCloudDumpCallback, this, std::placeholders::_1, std::placeholders::_2));
         // Advertise the filtered point cloud topic
         total_cloud_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
             output_topic_, 1);
 
         // Initialize the TF2 transform listener and buffer
-        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+        tf_buffer_1_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_1_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_1_);
+        tf_buffer_2_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_2_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_2_);
 
         // initialize filters
         pass_z_local.setFilterFieldName("z");
         pass_z_local.setFilterLimits(0.0, 1.5);
         pass_z_target.setFilterFieldName("z");
-        pass_z_target.setFilterLimits(0.0, 1.0);
-
+        pass_z_target.setFilterLimits(0.02, 1.0);
 
         // log every param
         RCLCPP_INFO(this->get_logger(), "input_topic_1: %s", input_topic_1_.c_str());
@@ -81,16 +89,29 @@ public:
 private:
     void callback1(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
-        processPointCloud(msg);
+        // id is used to distinguish the tf buffer
+        processPointCloud(msg, 1);
     }
     void callback2(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
-        processPointCloud(msg);
+        // id is used to distinguish the tf buffer
+        processPointCloud(msg, 2);
     }
-    void processPointCloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+    void pointCloudDumpCallback(
+        const std::shared_ptr<std_srvs::srv::Empty::Request> request,
+        std::shared_ptr<std_srvs::srv::Empty::Response> response)
     {
+        // suppress unused parameter warning
+        (void)(request);
+        (void)(response);
+        // Dump the point cloud to a ply file
+        pcl::io::savePLYFileBinary("total_cloud.ply", *total_cloud_);
+        RCLCPP_INFO(this->get_logger(), "\033[96m \033[1m Point cloud has been dumped to total_cloud.ply \033[0m");
+    }
+    void processPointCloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg, int id)
+    {
+        transform_available = getTransform(total_cloud_frame_, msg->header.frame_id, msg->header.stamp, id);
 
-        transform_available = getTransform(total_cloud_frame_, msg->header.frame_id, msg->header.stamp, *tf_buffer_);
         if (!transform_available)
         {
             return;
@@ -106,8 +127,14 @@ private:
         localFrameFilter(cloud);
 
         // Apply the transform to the point cloud
-        pcl::transformPointCloud(*cloud, *cloud, eigen_transform);
-        
+        if (id == 1)
+        {
+            pcl::transformPointCloud(*cloud, *cloud, eigen_transform_1_);
+        }
+        else
+        {
+            pcl::transformPointCloud(*cloud, *cloud, eigen_transform_2_);
+        }
 
         // Add the received point cloud to the filtered point cloud
         *total_cloud_ += *cloud;
@@ -123,29 +150,27 @@ private:
     }
 
     bool getTransform(
-        const std::string &target_frame, const::std::string &source_frame, rclcpp::Time stamp, tf2_ros::Buffer &tf_buffer)
+        const std::string &target_frame, const ::std::string &source_frame, rclcpp::Time stamp, int id)
     {
-        if(target_frame == source_frame)
-        {
-            eigen_transform = Eigen::Matrix4f::Identity();
-            return true;
-        }
         try
         {
-            transform_ = tf_buffer.lookupTransform(target_frame, source_frame, stamp);
+            if (id == 1)
+            {
+                transform_1_ = tf_buffer_1_->lookupTransform(target_frame, source_frame, stamp);
+                pcl_ros::transformAsMatrix(transform_1_, eigen_transform_1_);
+            }
+            else
+            {
+                transform_2_ = tf_buffer_2_->lookupTransform(target_frame, source_frame, stamp);
+                pcl_ros::transformAsMatrix(transform_2_, eigen_transform_2_);
+            }
+            return true;
         }
         catch (tf2::TransformException &ex)
         {
             RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
             return false;
         }
-
-        // Convert the TF transform to Eigen format
-        pcl_ros::transformAsMatrix(transform_, eigen_transform);
-        // print transform
-        // std::cout << "Transform: " << std::endl;
-        // std::cout << eigen_transform << std::endl;
-        return true;
     }
 
     void localFrameFilter(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
@@ -160,8 +185,7 @@ private:
         // Apply PassThrough filter
         pass_z_target.setInputCloud(total_cloud_);
         pass_z_target.filter(*total_cloud_);
-        
-        
+
         if ((int)total_cloud_->size() > max_cloud_size_)
         {
             // Apply VoxelGrid filter
@@ -176,24 +200,26 @@ private:
         }
     }
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr total_cloud_;
-    int max_cloud_size_;
-    float voxel_grid_size;
+    // subscribers and publishers
     std::string input_topic_1_, input_topic_2_, output_topic_, total_cloud_frame_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_subscriber_1_, point_cloud_subscriber_2_;
-    rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr total_cloud_publisher_;
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr point_cloud_dump_service_;
+    // tf conversion
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_1_, tf_buffer_2_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_1_, tf_listener_2_;
+    geometry_msgs::msg::TransformStamped transform_1_, transform_2_;
+    Eigen::Matrix4f eigen_transform_1_, eigen_transform_2_;
+    // final cloud
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr total_cloud_;
     sensor_msgs::msg::PointCloud2 total_cloud_msg_;
 
     // filters
+    float voxel_grid_size;
     pcl::VoxelGrid<pcl::PointXYZRGB> voxel_filter_;
+    int max_cloud_size_;
     pcl::RandomSample<pcl::PointXYZRGB> random_sample;
     pcl::PassThrough<pcl::PointXYZRGB> pass_z_target, pass_z_local;
-    // Get the TF transform
-    geometry_msgs::msg::TransformStamped transform_;
-    Eigen::Matrix4f eigen_transform;
     // utils
     bool transform_available;
 };
