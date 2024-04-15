@@ -46,11 +46,22 @@ def generate_launch_description():
         parameters=[{"use_sim_time": True},
             ]
     )
+    integrator = Node(
+        package='project',
+        executable='integrator',
+        output='screen',
+        parameters=[{"use_sim_time": True},
+            ]
+    )
+    integrator_t = TimerAction(period=2.0,
+            actions=[integrator]
+            )
+
     node_list = [
         # pointcloud_accumulator,
         # rviz
         voronoi_calculator
         ]
-    return LaunchDescription(node_list)
+    return LaunchDescription(node_list + [integrator_t])
 
 

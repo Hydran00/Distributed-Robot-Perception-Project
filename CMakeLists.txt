@@ -35,8 +35,9 @@ ament_target_dependencies(pointcloud_accumulator pcl_ros pcl_conversions rclcpp 
 target_link_libraries(pointcloud_accumulator ${PCL_LIBRARIES}) 
 
 
-# voronoi integration
-add_executable(voronoi_calculator voronoi/voronoi_calculator.cpp)
+################ Voronoi calculator ##############################
+
+add_executable(voronoi_calculator src/voronoi_calculator.cpp)
 
 find_file(libvoro_include NAMES "voro++/")
 # message(STATUS ${libvoro_include})
@@ -52,7 +53,14 @@ target_link_libraries(voronoi_calculator libvoro++)
 
 ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros)
 
-INSTALL (TARGETS pointcloud_accumulator voronoi_calculator
+################ Function integrator ##############################
+
+add_executable(integrator src/integration.cpp)
+ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros)
+
+
+
+INSTALL (TARGETS pointcloud_accumulator voronoi_calculator integrator
   DESTINATION lib/${PROJECT_NAME}
 )
 # python executable
