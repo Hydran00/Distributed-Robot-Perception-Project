@@ -43,8 +43,8 @@ def generate_launch_description():
 
     node_list = TimerAction(period=5.0,
             actions=[
-                pointcloud_accumulator,
-                rviz,
+                # pointcloud_accumulator,
+                # rviz,
                 
             ])
 

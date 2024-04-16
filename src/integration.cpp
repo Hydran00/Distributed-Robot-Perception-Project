@@ -127,6 +127,7 @@ public:
     }
     void callback_1(const geometry_msgs::msg::PoseArray::SharedPtr msg)
     {
+        cout << "Callback 1" << endl;
         // Extract vertices from the message
         for (const auto &pose : msg->poses)
         {
@@ -135,7 +136,6 @@ public:
 
         // Integrate the product of vector-valued PDF over the polyhedron
         result_1_ = integrate_vector_valued_pdf_over_polyhedron(product_pdf, vertices_1_);
-        cout << "1 -> Result: " << result_1_.transpose() << endl;
         // publish the result
 
         try
@@ -152,6 +152,7 @@ public:
         }
         catch (tf2::TransformException &ex)
         {
+            RCLCPP_INFO(this->get_logger(), "Could not get transform: %s", ex.what());
             return;
         }
         target_pub_1_->publish(pose_out_1_);
@@ -159,6 +160,7 @@ public:
     }
     void callback_2(const geometry_msgs::msg::PoseArray::SharedPtr msg)
     {
+        cout << "Callback 2" << endl;
         // Extract vertices from the message
         for (const auto &pose : msg->poses)
         {
@@ -167,7 +169,7 @@ public:
 
         // Integrate the product of vector-valued PDF over the polyhedron
         result_2_ = integrate_vector_valued_pdf_over_polyhedron(product_pdf, vertices_2_);
-        cout << "2 -> Result: " << result_2_.transpose() << endl;
+        // cout << "2 -> Result: " << result_2_.transpose() << endl;
         // publish the result
 
         try
@@ -184,6 +186,7 @@ public:
         }
         catch (tf2::TransformException &ex)
         {
+            RCLCPP_INFO(this->get_logger(), "Could not get transform: %s", ex.what());
             return;
         }
         target_pub_2_->publish(pose_out_2_);
@@ -212,7 +215,7 @@ private:
 int main(int argc, char *argv[])
 {
     // Set mean and covariance of the multivariate Gaussian PDF
-    mean << 0, 0, 0;                       // Mean vector
+    mean << 0, 0, 0.5;                       // Mean vector
     covariance = MatrixXd::Identity(3, 3); // Identity covariance matrix
 
     // // Example usage: define the vertices of a tetrahedron

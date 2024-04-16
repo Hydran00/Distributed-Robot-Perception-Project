@@ -64,6 +64,7 @@ public:
     RCLCPP_INFO(this->get_logger(), "target_frame: %s", target_frame_.c_str());
     RCLCPP_INFO(this->get_logger(), "input_frame_1: %s", input_frame_1_.c_str());
     RCLCPP_INFO(this->get_logger(), "input_frame_2: %s", input_frame_2_.c_str());
+    std::cout <<"------------------------"<<std::endl;
 
   }
 
@@ -84,7 +85,7 @@ private:
     }
     catch (tf2::TransformException &ex)
     {
-      // RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s", ex.what());
+      RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s", ex.what());
       return;
     }
 
