@@ -16,7 +16,7 @@
 #include <tf2_ros/transform_listener.h>
 #include "tf2/transform_datatypes.h"
 #include "tf2/convert.h"
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 // 1) integrate voro++ so that we can obtain vertices of the polyhedrons starting from robot pose
 // 2) publish control input to the robot
 using namespace std;
@@ -114,16 +114,23 @@ public:
 
         // Subscriber
         voronoi_sub_1_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
-            "/voronoi_vertices_1", 10, std::bind(&PdfIntegrator::callback_1, this, std::placeholders::_1));
+            "/voronoi_vertices_1", 1, std::bind(&PdfIntegrator::callback_1, this, std::placeholders::_1));
         voronoi_sub_2_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
-            "/voronoi_vertices_2", 10, std::bind(&PdfIntegrator::callback_2, this, std::placeholders::_1));
+            "/voronoi_vertices_2", 1, std::bind(&PdfIntegrator::callback_2, this, std::placeholders::_1));
 
         tf_buffer_1_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_1_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_1_);
         tf_buffer_2_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_2_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_2_);
 
+        timer_ = this->create_wall_timer(20ms, std::bind(&PdfIntegrator::publish_target_frames, this));
+
         RCLCPP_INFO(this->get_logger(), "PdfIntegrator has been started.");
+    }
+    void publish_target_frames()
+    {
+        target_pub_1_->publish(pose_out_1_);
+        target_pub_2_->publish(pose_out_2_);
     }
     void callback_1(const geometry_msgs::msg::PoseArray::SharedPtr msg)
     {
@@ -134,8 +141,12 @@ public:
             vertices_1_.push_back(Vector3d(pose.position.x, pose.position.y, pose.position.z));
         }
 
+
         // Integrate the product of vector-valued PDF over the polyhedron
         result_1_ = integrate_vector_valued_pdf_over_polyhedron(product_pdf, vertices_1_);
+        cout << "1 -> Result: " << result_1_.transpose() << endl;
+
+        vertices_1_.clear();
         // publish the result
 
         try
@@ -148,20 +159,27 @@ public:
             pose_in_1_.header.stamp = this->now();
             transform_1_ = tf_buffer_1_->lookupTransform("1_base_link", "world", tf2::TimePointZero);
             tf2::doTransform(pose_in_1_, pose_out_1_, transform_1_);
-        
+
+            pose_out_1_.pose.position.x = -0.117;
+            // pose_out_1_.pose.position.y = 0.328;
+            pose_out_1_.pose.position.z = 0.253;
+
+            pose_out_1_.pose.orientation.x = -0.707;
+            pose_out_1_.pose.orientation.y = 0;
+            pose_out_1_.pose.orientation.z = 0;
+            pose_out_1_.pose.orientation.w = 0.707;
         }
         catch (tf2::TransformException &ex)
         {
             RCLCPP_INFO(this->get_logger(), "Could not get transform: %s", ex.what());
-            return;
+            // return;
         }
-        target_pub_1_->publish(pose_out_1_);
-        vertices_1_.clear();
     }
     void callback_2(const geometry_msgs::msg::PoseArray::SharedPtr msg)
     {
         cout << "Callback 2" << endl;
         // Extract vertices from the message
+
         for (const auto &pose : msg->poses)
         {
             vertices_2_.push_back(Vector3d(pose.position.x, pose.position.y, pose.position.z));
@@ -169,8 +187,10 @@ public:
 
         // Integrate the product of vector-valued PDF over the polyhedron
         result_2_ = integrate_vector_valued_pdf_over_polyhedron(product_pdf, vertices_2_);
-        // cout << "2 -> Result: " << result_2_.transpose() << endl;
+        cout << "2 -> Result: " << result_2_.transpose() << endl;
         // publish the result
+
+        vertices_2_.clear();
 
         try
         {
@@ -182,23 +202,29 @@ public:
             pose_in_2_.header.stamp = this->now();
             transform_2_ = tf_buffer_2_->lookupTransform("2_base_link", "world", tf2::TimePointZero);
             tf2::doTransform(pose_in_2_, pose_out_2_, transform_2_);
-        
+
+            pose_out_2_.pose.position.x = -0.117;
+            // pose_out_2_.pose.position.y = 0.328;
+            pose_out_2_.pose.position.z = 0.253;
+
+            pose_out_2_.pose.orientation.x = -0.707;
+            pose_out_2_.pose.orientation.y = 0;
+            pose_out_2_.pose.orientation.z = 0;
+            pose_out_2_.pose.orientation.w = 0.707;
         }
         catch (tf2::TransformException &ex)
         {
             RCLCPP_INFO(this->get_logger(), "Could not get transform: %s", ex.what());
-            return;
+            // return;
         }
-        target_pub_2_->publish(pose_out_2_);
-        vertices_2_.clear();
     }
-
 
 private:
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_1_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_2_;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr voronoi_sub_1_;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr voronoi_sub_2_;
+    rclcpp::TimerBase::SharedPtr timer_;
     geometry_msgs::msg::PoseStamped target_1_, target_2_;
     VectorXd result_1_;
     VectorXd result_2_;
@@ -209,13 +235,12 @@ private:
     geometry_msgs::msg::TransformStamped transform_1_, transform_2_;
     geometry_msgs::msg::PoseStamped pose_in_1_, pose_out_1_;
     geometry_msgs::msg::PoseStamped pose_in_2_, pose_out_2_;
-
 };
 
 int main(int argc, char *argv[])
 {
     // Set mean and covariance of the multivariate Gaussian PDF
-    mean << 0, 0, 0.5;                       // Mean vector
+    mean << 0, 0, 0;                     // Mean vector
     covariance = MatrixXd::Identity(3, 3); // Identity covariance matrix
 
     // // Example usage: define the vertices of a tetrahedron

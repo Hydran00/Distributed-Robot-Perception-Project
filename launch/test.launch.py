@@ -62,6 +62,6 @@ def generate_launch_description():
         # rviz
         voronoi_calculator
         ]
-    return LaunchDescription(node_list + [integrator_t])
+    return LaunchDescription(node_list + [integrator_t])    
 
 
