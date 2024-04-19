@@ -5,6 +5,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)")
   add_compile_options(-Wno-unused-variable)
 endif()
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
 # find dependencies
 set(THIS_PACKAGE_INCLUDE_DEPENDS
   rclcpp
@@ -54,7 +58,7 @@ add_library(libvoro++ STATIC IMPORTED)
 set_target_properties(libvoro++ PROPERTIES IMPORTED_LOCATION ${libvoro++_loc})
 
 target_link_libraries(voronoi_calculator libvoro++)
-
+target_include_directories(voronoi_calculator PUBLIC include/)
 ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros)
 
 ################ Function integrator ##############################
@@ -65,7 +69,7 @@ ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros tf2 tf2_geomet
 ################ Test Integrator ###########################################
 add_executable(integrator_test src/integrate_test.cpp)
 target_include_directories(integrator_test PUBLIC include/)
-target_link_libraries(integrator_test Eigen3::Eigen)
+target_link_libraries(integrator_test Eigen3::Eigen libvoro++)
 
 
 INSTALL (TARGETS pointcloud_accumulator voronoi_calculator integrator integrator_test
