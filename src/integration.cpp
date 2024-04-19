@@ -48,8 +48,16 @@ VectorXd multivariate_gaussian_pdf(double x, double y, double z) {
 VectorXd product_pdf(double x, double y, double z) {
   VectorXd pdf = multivariate_gaussian_pdf(x, y, z);
   VectorXd result = VectorXd::Zero(3);
-  result << x * pdf(0), y * pdf(0),
-      z * pdf(0);  // Element-wise product with [x, y, z]
+  // Element-wise product with [x, y, z]
+  result << x * pdf(0), y * pdf(0), z * pdf(0);  
+  return result;
+}
+
+// Simple function to test f(x,y,z) = [-(x^2+y^2+z^2), -(x^2+y^2+z^2), -(x^2+y^2+z^2)]
+VectorXd test_pdf(double x, double y, double z) {
+  VectorXd result(3);
+  result << -x * x - y * y - z * z, -x * x - y * y - z * z,
+      -x * x - y * y - z * z;
   return result;
 }
 
@@ -63,57 +71,71 @@ double polyhedron_volume(vector<Vector3d> &vertices) {
          6.0;  // Using SVD to compute the volume of a tetrahedron
 }
 
-// Integrate vector-valued PDF over the polyhedron
+// Find if a point is inside a polyhedron
+bool point_inside_polyhedron(vector<Vector3d> &vertices, Vector3d &point) {
+  // Define the polyhedron planes
+  vector<Vector3d> planes;
+  for (size_t i = 0; i < vertices.size(); ++i) {
+    Vector3d v1 = vertices[i];
+    Vector3d v2 = vertices[(i + 1) % vertices.size()];
+    Vector3d normal = (v2 - v1).cross(v1 - point);
+    normal.normalize();
+    planes.push_back(normal);
+  }
+
+  // Check if the point is inside the polyhedron
+  for (const auto &plane : planes) {
+    double sum = 0;
+    for (const auto &vertex : vertices) {
+      sum += (vertex - point).dot(plane);
+    }
+    if (sum < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 VectorXd integrate_vector_valued_pdf_over_polyhedron(
-    std::function<VectorXd(double, double, double)> pdf_func,
-    vector<Vector3d> &vertices, double polyhedron_vol) {
-  // Compute the volume of the polyhedron
-  // double polyhedron_vol = polyhedron_volume(vertices);
-  std::cout << "Volume is " << polyhedron_vol << "\n";
-  // Define the integration limits
+      std::function<VectorXd(double, double, double)> pdf_func,
+      vector<Vector3d> &vertices, double polyhedron_vol) {
+  
+  VectorXd result(3);
+  result << 0, 0, 0;
+
   double xmin = numeric_limits<double>::infinity(),
          xmax = -numeric_limits<double>::infinity();
   double ymin = numeric_limits<double>::infinity(),
          ymax = -numeric_limits<double>::infinity();
   double zmin = numeric_limits<double>::infinity(),
          zmax = -numeric_limits<double>::infinity();
+
   for (const auto &vertex : vertices) {
     xmin = min(xmin, vertex(0));
     xmax = max(xmax, vertex(0));
-    ymin = min(ymin, vertex(1));
-    ymax = max(ymax, vertex(1));
-    zmin = min(zmin, vertex(2));
-    zmax = max(zmax, vertex(2));
+    ymin = min(ymin, vertex(0));
+    ymax = max(ymax, vertex(0));
+    zmin = min(zmin, vertex(0));
+    zmax = max(zmax, vertex(0));
   }
 
-  // Perform the triple integral over the polyhedron for each component
-  // separately
-  VectorXd result(3);
-  for (int i = 0; i < 3; ++i) {
-    std::cout << "A " << i << std::endl;
-    auto integrator_func = [&](double z) {
-      std::cout << "BA " << i << std::endl;
-      auto integrator_func_y = [&](double y) {
-        std::cout << "BB " << i << std::endl;
-
-        auto integrator_func_x = [&](double x) {
-          std::cout << "BC " << i << std::endl;
-
-          return pdf_func(x, y, z)(i);  // Extract the ith component
-        };
-        return bmq::gauss_kronrod<double, 3>().integrate(integrator_func_x,
-                                                         xmin, xmax);
-      };
-      return bmq::gauss_kronrod<double, 3>().integrate(integrator_func_y, ymin,
-                                                       ymax);
-    };
-    result(i) =
-        bmq::gauss_kronrod<double, 3>().integrate(integrator_func, zmin, zmax);
+  // Monte Carlo integration
+  int num_samples = 1000;
+  for (int i = 0; i < num_samples; ++i) {
+    double x = xmin + (xmax - xmin) * rand() / RAND_MAX;
+    double y = ymin + (ymax - ymin) * rand() / RAND_MAX;
+    double z = zmin + (zmax - zmin) * rand() / RAND_MAX;
+    Vector3d point(x, y, z);
+    if (point_inside_polyhedron(vertices, point)) {
+      result += product_pdf(x, y, z);
+    }
   }
-  std::cout << "B" << std::endl;
 
-  // Multiply each component by the volume of the polyhedron
-  return result * polyhedron_vol;
+  result *= (polyhedron_vol / num_samples);
+
+
+  return result;
+
 }
 
 class PdfIntegrator : public rclcpp::Node {
