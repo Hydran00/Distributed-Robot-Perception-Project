@@ -109,9 +109,10 @@ class VoronoiCalculator : public rclcpp::Node {
               break;
             }
           }
-          std::cout<<"inc1"<<std::endl;
+          // TODO 
+          // std::cout<<"inc1"<<std::endl;
         } while (cla.inc());
-          std::cout<<"inc2"<<std::endl;
+          // std::cout<<"inc2"<<std::endl;
 
       Eigen::Vector3d res =
           integrate_vector_valued_pdf_over_polyhedron(vertices, *container_, j);
