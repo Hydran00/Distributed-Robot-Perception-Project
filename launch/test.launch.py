@@ -84,14 +84,14 @@ def generate_launch_description():
     static_broadcaster_1 = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments = ["--y", "-1.0", "--frame-id", "world", "--child-frame-id","1_base_link"],
+        arguments = ["--y", "-0.75", "--frame-id", "world", "--child-frame-id","1_base_link"],
         parameters=[{"use_sim_time": True}],
         output="log"
     )
     static_broadcaster_2 = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments = ["--y","1.0","--yaw", "-3.1416", "--frame-id", "world", "--child-frame-id", "2_base_link"],
+        arguments = ["--y","0.75","--yaw", "-3.1416", "--frame-id", "world", "--child-frame-id", "2_base_link"],
         parameters=[{"use_sim_time": True}],
         output="log"
     )

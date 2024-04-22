@@ -69,15 +69,15 @@ class VoronoiCalculator : public rclcpp::Node {
         con_size_xmin, con_size_xmaz, con_size_ymin, con_size_ymax,
         con_size_zmin, con_size_zmax, 5, 5, 5, false, false, false, 8);
     timer_ = this->create_wall_timer(
-        50ms, std::bind(&VoronoiCalculator::updateVoronoi, this));
+        20ms, std::bind(&VoronoiCalculator::updateVoronoi, this));
 
       // publisher
     target_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
-        target_topic_, 10);
+        target_topic_, 1);
     if (debug_) {
       voronoi_vertices_pub_ =
           this->create_publisher<geometry_msgs::msg::PoseArray>(
-              "/voronoi_vertices" + prefix_1_, 10);
+              "/voronoi_vertices" + prefix_1_, 1);
     }
     // print params
     RCLCPP_INFO(this->get_logger(), "DEBUG FLAG: %d", debug_);
@@ -155,7 +155,7 @@ class VoronoiCalculator : public rclcpp::Node {
         pose_.pose.orientation.y = 0.0;
         pose_.pose.orientation.z = 0.0;
         pose_.pose.orientation.w = 0.707;
-        target_pub_->publish(pose_);
+        // target_pub_->publish(pose_);
         vertices.clear();
         if (debug_) {
         }
