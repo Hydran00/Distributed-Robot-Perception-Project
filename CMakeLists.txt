@@ -63,16 +63,16 @@ ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros)
 
 ################ Function integrator ##############################
 
-add_executable(integrator src/integration.cpp)
-ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros tf2 tf2_geometry_msgs)
+# add_executable(integrator src/integration.cpp)
+# ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros tf2 tf2_geometry_msgs)
 
 ################ Test Integrator ###########################################
-add_executable(integrator_test src/integrate_test.cpp)
-target_include_directories(integrator_test PUBLIC include/)
-target_link_libraries(integrator_test Eigen3::Eigen libvoro++)
+# add_executable(integrator_test src/integrate_test.cpp)
+# target_include_directories(integrator_test PUBLIC include/)
+# target_link_libraries(integrator_test Eigen3::Eigen libvoro++)
 
 
-INSTALL (TARGETS pointcloud_accumulator voronoi_calculator integrator integrator_test
+INSTALL (TARGETS pointcloud_accumulator voronoi_calculator
   DESTINATION lib/${PROJECT_NAME}
 )
 # python executable

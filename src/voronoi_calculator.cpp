@@ -16,7 +16,7 @@
 // tf2
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-
+#include <unistd.h>
 using namespace std;
 using namespace voro;
 using namespace std::chrono_literals;
@@ -30,8 +30,11 @@ class VoronoiCalculator : public rclcpp::Node {
     this->declare_parameter("prefix", "1_");
     prefix_ = this->get_parameter("prefix").as_string();
 
-    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+    tf_buffer_1_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_1_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_1_);
+
+    tf_buffer_2_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_2_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_2_);
 
     container_ = std::make_shared<container>(-con_size, con_size, -con_size,
                                              con_size, -con_size, con_size, 5,
@@ -50,7 +53,8 @@ class VoronoiCalculator : public rclcpp::Node {
         "2_" + this->get_parameter("input_frame_other_robot").as_string();
 
     this->declare_parameter("output_topic", "target_frame");
-    output_topic_ = "/robot" + std::string(1, prefix_[0]) + "/" + this->get_parameter("output_topic").as_string();
+    output_topic_ = "/robot" + std::string(1, prefix_[0]) + "/" +
+                    this->get_parameter("output_topic").as_string();
 
     // publisher
     target_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
@@ -62,18 +66,30 @@ class VoronoiCalculator : public rclcpp::Node {
     RCLCPP_INFO(this->get_logger(), "input_frame_other_robot: %s",
                 input_frame_other_robot_.c_str());
     RCLCPP_INFO(this->get_logger(), "output_topic: %s", output_topic_.c_str());
-
-    std::cout << "------------------------" << std::endl;
   }
 
  private:
   void updateVoronoi() {
-    std::cout << "updateVoronoi" << std::endl;
     try {
-      r1_pose_ = tf_buffer_->lookupTransform(target_frame_, input_frame_,
+      std::cout <<"input_frame: "<<input_frame_<<std::endl;
+      std::cout <<"input_frame_other_robot: "<<input_frame_other_robot_<<std::endl;
+      auto r1_pose_ = tf_buffer_1_->lookupTransform(target_frame_, input_frame_,
                                              tf2::TimePointZero);
-      r2_pose_ = tf_buffer_->lookupTransform(
+      auto r2_pose_ = tf_buffer_2_->lookupTransform(
           target_frame_, input_frame_other_robot_, tf2::TimePointZero);
+
+      std::cout << "r1_pose: \n"
+                << r1_pose_.transform.translation.x << " "
+                << r1_pose_.transform.translation.y << " "
+                << r1_pose_.transform.translation.z << std::endl;
+      std::cout << "r2_pose \n"
+                << r2_pose_.transform.translation.x << " "
+                << r2_pose_.transform.translation.y << " "
+                << r2_pose_.transform.translation.z << std::endl;
+
+      const double r1_x = r1_pose_.transform.translation.x;
+      const double r1_y = r1_pose_.transform.translation.y;
+      const double r1_z = r1_pose_.transform.translation.z;
 
       container_->clear();
       container_->put(0, r1_pose_.transform.translation.x,
@@ -82,56 +98,50 @@ class VoronoiCalculator : public rclcpp::Node {
       container_->put(1, r2_pose_.transform.translation.x,
                       r2_pose_.transform.translation.y,
                       r2_pose_.transform.translation.z);
-      std::cout << "Created containter" << std::endl;
-
       double x, y, z, rx, ry, rz;
-      int j = 0, current_cell_idx = 0;
+      int j, current_cell_idx = 0;
       // retrieve the cell id of the considered robot
-      std::cout << "Searching" << std::endl;
-
-      container_->find_voronoi_cell(
+      bool success = container_->find_voronoi_cell(
           r1_pose_.transform.translation.x, r1_pose_.transform.translation.y,
           r1_pose_.transform.translation.z, rx, ry, rz, j);
-      // extract vertices of the j cell
 
+      // extract vertices of the j cell
+      double cell_vol;
       voro::c_loop_all cla(*container_);
       voro::voronoicell c;
       if (cla.start()) do {
-          std::cout << "A" << std::endl;
           if (container_->compute_cell(c, cla)) {
-            std::cout << "B" << std::endl;
             cla.pos(current_cell_idx, x, y, z, rx);
             if (current_cell_idx == j) {
-              for (int i = 0; i < c.p; i += 3) {
+              for (size_t i = 0; i < c.p; i++) {
                 vertices.push_back(Eigen::Vector3d(
-                    c.pts[3 * i], c.pts[3 * i + 1], c.pts[3 * i + 2]));
+                    r1_x + 0.5 * c.pts[3 * i], r1_y + 0.5 * c.pts[3 * i + 1],
+                    r1_z + 0.5 * c.pts[3 * i + 2]));
               }
-              break;
             }
+            cell_vol = c.volume();
+            break;
           }
-          // TODO 
-          // std::cout<<"inc1"<<std::endl;
         } while (cla.inc());
-          // std::cout<<"inc2"<<std::endl;
-
-      Eigen::Vector3d res =
-          integrate_vector_valued_pdf_over_polyhedron(vertices, *container_, j);
-      std::cout << "Result: \n" << res << std::endl;
-      std::cout << "------------------------" << std::endl;
-      vertices.clear();
+      std::cout << "SIZE: " << vertices.size() << std::endl;
+      if (vertices.size() > 0) {
+        auto res = integrate_vector_valued_pdf_over_polyhedron(vertices,
+                                                               container_, j);
+        vertices.clear();
+      }
     } catch (tf2::TransformException &ex) {
-      // RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
-      // ex.what());
-      std::cout << "err: Could not get transform: " << ex.what() << std::endl;
+      RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
+                   ex.what());
       // return;
     }
+    std::cout << "-------------------------" << std::endl;
   }
   // subscribers and publishers
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   // get robot end effector pose
-  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_1_, tf_buffer_2_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_1_, tf_listener_2_;
   geometry_msgs::msg::TransformStamped transform_;
   // utils
   std::string topic_prefix_;
