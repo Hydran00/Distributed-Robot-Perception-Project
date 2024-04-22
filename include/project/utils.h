@@ -21,18 +21,18 @@ Eigen::VectorXd test_pdf(double x, double y, double z) {
 }
 
 // Multivariate Gaussian PDF in R^3
-Eigen::VectorXd multivariate_gaussian_pdf(Eigen::Vector3d point,
+double multivariate_gaussian_pdf(Eigen::Vector3d point,
                                           Eigen::Vector3d mean,
                                           Eigen::Matrix3d covariance) {
   Eigen::Vector3d diff = point - mean;
+  double radius = 0.3;
+  if(point.norm() > radius) {
+    return 0;
+  }
   double exponent = -0.5 * diff.transpose() * covariance.inverse() * diff;
   double normalization =
       pow(2 * M_PI, -mean.size() / 2) * sqrt(covariance.determinant());
-  Eigen::VectorXd density(3);
-  density << normalization * exp(exponent), 0,
-      0;  // Return a vector with the density for each component (in this case,
-          // just one component)
-  return density;
+  return normalization * exp(exponent);
 }
 
 Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
@@ -65,13 +65,9 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
   double h = 0.05;
   int counter = 0;
   int tot = 0;
-  // std::cout <<"xmin: "<<xmin<<std::endl;
-  // std::cout <<"xmax: "<<xmax<<std::endl;
-  // std::cout <<"ymin: "<<ymin<<std::endl;
-  // std::cout <<"ymax: "<<ymax<<std::endl;
-  // std::cout <<"zmin: "<<zmin<<std::endl;
-  // std::cout <<"zmax: "<<zmax<<std::endl;
-
+  double mass = 0, pdf = 0;
+  // double cube_vol = pow(h, 3);
+  Eigen::Vector3d com = Eigen::Vector3d::Zero(); //center of mass
   for (double ix = xmin + h / 2; ix < xmax; ix += h) {
     for (double iy = ymin + h / 2; iy < ymax; iy += h) {
       for (double iz = zmin + h / 2; iz < zmax; iz += h) {
@@ -80,20 +76,17 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
         y = iy;
         z = iz;
         point << x, y, z;
-        // std::cout << "\t\tstart"<<std::endl;
         if (con->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
-          result += multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0.5),
+          pdf = multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 1.0),
                                               Eigen::Matrix3d::Identity());
+          mass += pdf;
+          com += pdf * point ;
         }
-        // std::cout << "\t\tend"<<std::endl;
       }
     }
   }
-  // std::cout << "Counter: " << counter << std::endl;
-  // std::cout << "Total: " << tot << std::endl;
-  result *= pow(h, 3);
-  // std::cout << " return" << std::endl;
-  return result;
+  // TODO: check that in equation 7 we can omit volume h^3
+  return (1 / mass) * com;
 }
 
 #endif

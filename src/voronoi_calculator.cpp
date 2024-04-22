@@ -11,12 +11,17 @@
 #include "project/utils.h"
 #include "voro++.hh"
 // ROS2
+#include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
 // tf2
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <unistd.h>
+
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+#include "tf2/convert.h"
 using namespace std;
 using namespace voro;
 using namespace std::chrono_literals;
@@ -27,65 +32,72 @@ class VoronoiCalculator : public rclcpp::Node {
     // avoid storing the pointcloud if transform is not available
     rclcpp::sleep_for(2s);
 
-    this->declare_parameter("prefix", "1_");
-    prefix_ = this->get_parameter("prefix").as_string();
+    this->declare_parameter("prefix_1", "");
+    prefix_1_ = this->get_parameter("prefix_1").as_string();
 
-    tf_buffer_1_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-    tf_listener_1_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_1_);
+    this->declare_parameter("prefix_2", "");
+    prefix_2_ = this->get_parameter("prefix_2").as_string();
 
-    tf_buffer_2_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-    tf_listener_2_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_2_);
+    this->declare_parameter("debug", false);
+    debug_ = this->get_parameter("debug").as_bool();
 
-    container_ = std::make_shared<container>(-con_size, con_size, -con_size,
-                                             con_size, -con_size, con_size, 5,
-                                             5, 5, false, false, false, 8);
-    timer_ = this->create_wall_timer(
-        100ms, std::bind(&VoronoiCalculator::updateVoronoi, this));
-
-    this->declare_parameter("target_frame", "world");
-    target_frame_ = this->get_parameter("target_frame").as_string();
+    this->declare_parameter("voronoi_frame", "world");
+    voronoi_frame_ = this->get_parameter("voronoi_frame").as_string();
 
     this->declare_parameter("input_frame", "camera");
-    input_frame_ = prefix_ + this->get_parameter("input_frame").as_string();
+    input_frame_ = prefix_1_ + this->get_parameter("input_frame").as_string();
 
     this->declare_parameter("input_frame_other_robot", "camera");
     input_frame_other_robot_ =
-        "2_" + this->get_parameter("input_frame_other_robot").as_string();
+        prefix_2_ + this->get_parameter("input_frame_other_robot").as_string();
 
-    this->declare_parameter("output_topic", "target_frame");
-    output_topic_ = "/robot" + std::string(1, prefix_[0]) + "/" +
-                    this->get_parameter("output_topic").as_string();
+    this->declare_parameter("target_topic", "target_frame");
+    target_topic_ =  "/robot" + prefix_1_ + "/" + this->get_parameter("target_topic").as_string();
 
-    // publisher
+    this->declare_parameter("base_frame", "base_link");
+    base_frame_ =  prefix_1_ + this->get_parameter("base_frame").as_string();
+
+    tf_buffer_1_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_1_ =
+        std::make_shared<tf2_ros::TransformListener>(*tf_buffer_1_);
+
+    tf_buffer_2_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_2_ =
+        std::make_shared<tf2_ros::TransformListener>(*tf_buffer_2_);
+
+    container_ = std::make_shared<container>(
+        con_size_xmin, con_size_xmaz, con_size_ymin, con_size_ymax,
+        con_size_zmin, con_size_zmax, 5, 5, 5, false, false, false, 8);
+    timer_ = this->create_wall_timer(
+        50ms, std::bind(&VoronoiCalculator::updateVoronoi, this));
+
+      // publisher
     target_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
-        "/robot" + std::string(1, prefix_[0]) + "/target_frame", 10);
-
+        target_topic_, 10);
+    if (debug_) {
+      voronoi_vertices_pub_ =
+          this->create_publisher<geometry_msgs::msg::PoseArray>(
+              "/voronoi_vertices" + prefix_1_, 10);
+    }
     // print params
-    RCLCPP_INFO(this->get_logger(), "target_frame: %s", target_frame_.c_str());
+    RCLCPP_INFO(this->get_logger(), "DEBUG FLAG: %d", debug_);
+    RCLCPP_INFO(this->get_logger(), "voronoi_frame: %s",
+                voronoi_frame_.c_str());
     RCLCPP_INFO(this->get_logger(), "input_frame: %s", input_frame_.c_str());
     RCLCPP_INFO(this->get_logger(), "input_frame_other_robot: %s",
                 input_frame_other_robot_.c_str());
-    RCLCPP_INFO(this->get_logger(), "output_topic: %s", output_topic_.c_str());
+    RCLCPP_INFO(this->get_logger(), "base_frame: %s", base_frame_.c_str());
+    RCLCPP_INFO(this->get_logger(), "target_topic: %s", target_topic_.c_str());
+
   }
 
  private:
   void updateVoronoi() {
     try {
-      std::cout <<"input_frame: "<<input_frame_<<std::endl;
-      std::cout <<"input_frame_other_robot: "<<input_frame_other_robot_<<std::endl;
-      auto r1_pose_ = tf_buffer_1_->lookupTransform(target_frame_, input_frame_,
-                                             tf2::TimePointZero);
+      auto r1_pose_ = tf_buffer_1_->lookupTransform(
+          voronoi_frame_, input_frame_, tf2::TimePointZero, 10ms);
       auto r2_pose_ = tf_buffer_2_->lookupTransform(
-          target_frame_, input_frame_other_robot_, tf2::TimePointZero);
-
-      std::cout << "r1_pose: \n"
-                << r1_pose_.transform.translation.x << " "
-                << r1_pose_.transform.translation.y << " "
-                << r1_pose_.transform.translation.z << std::endl;
-      std::cout << "r2_pose \n"
-                << r2_pose_.transform.translation.x << " "
-                << r2_pose_.transform.translation.y << " "
-                << r2_pose_.transform.translation.z << std::endl;
+          voronoi_frame_, input_frame_other_robot_, tf2::TimePointZero, 10ms);
 
       const double r1_x = r1_pose_.transform.translation.x;
       const double r1_y = r1_pose_.transform.translation.y;
@@ -106,7 +118,7 @@ class VoronoiCalculator : public rclcpp::Node {
           r1_pose_.transform.translation.z, rx, ry, rz, j);
 
       // extract vertices of the j cell
-      double cell_vol;
+
       voro::c_loop_all cla(*container_);
       voro::voronoicell c;
       if (cla.start()) do {
@@ -118,44 +130,82 @@ class VoronoiCalculator : public rclcpp::Node {
                     r1_x + 0.5 * c.pts[3 * i], r1_y + 0.5 * c.pts[3 * i + 1],
                     r1_z + 0.5 * c.pts[3 * i + 2]));
               }
+              break;
             }
-            cell_vol = c.volume();
-            break;
           }
         } while (cla.inc());
-      std::cout << "SIZE: " << vertices.size() << std::endl;
       if (vertices.size() > 0) {
+        if (debug_) {
+          publish_voronoi_vertices(vertices);
+        }
+
         auto res = integrate_vector_valued_pdf_over_polyhedron(vertices,
                                                                container_, j);
+        // publish the result
+        pose_.header.stamp = this->now();
+        pose_.header.frame_id = voronoi_frame_;
+        pose_.pose.position.x = res(0);
+        pose_.pose.position.y = res(1);
+        pose_.pose.position.z = res(2);
+        auto trans = tf_buffer_1_->lookupTransform(
+            base_frame_, voronoi_frame_, tf2::TimePointZero);
+        tf2::doTransform(pose_, pose_, trans);
+        // apply orientation
+        pose_.pose.orientation.x = -0.707;
+        pose_.pose.orientation.y = 0.0;
+        pose_.pose.orientation.z = 0.0;
+        pose_.pose.orientation.w = 0.707;
+        target_pub_->publish(pose_);
         vertices.clear();
+        if (debug_) {
+        }
       }
+
     } catch (tf2::TransformException &ex) {
       RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
                    ex.what());
       // return;
     }
-    std::cout << "-------------------------" << std::endl;
   }
+  void publish_voronoi_vertices(std::vector<Eigen::Vector3d> vertices) {
+    // publish voronoi vertices
+    voronoi_vertices_.header.stamp = this->now();
+    voronoi_vertices_.header.frame_id = voronoi_frame_;
+    voronoi_vertices_.poses.clear();
+    for (const auto &vertex : vertices) {
+      geometry_msgs::msg::Pose pose;
+      pose.position.x = vertex(0);
+      pose.position.y = vertex(1);
+      pose.position.z = vertex(2);
+      voronoi_vertices_.poses.push_back(pose);
+    }
+    voronoi_vertices_pub_->publish(voronoi_vertices_);
+  }
+
   // subscribers and publishers
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr
+      voronoi_vertices_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   // get robot end effector pose
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_1_, tf_buffer_2_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_1_, tf_listener_2_;
   geometry_msgs::msg::TransformStamped transform_;
   // utils
-  std::string topic_prefix_;
   geometry_msgs::msg::TransformStamped r1_pose_, r2_pose_;
+  geometry_msgs::msg::PoseArray voronoi_vertices_;
   geometry_msgs::msg::PoseStamped pose_;
   std::vector<Eigen::Vector3d> vertices;
   bool cell_found_ = false;
-  const double con_size = 2.0;
-  const double cube_edge = 0.05;
-  const double volume_cube = pow(cube_edge, 3);
+  const double con_size_xmin = -0.8, con_size_xmaz = 0.8;
+  const double con_size_ymin = -1.2, con_size_ymax = 1.2;
+  const double con_size_zmin = 0, con_size_zmax = 1.0;
   std::string input_frame_, input_frame_other_robot_;
-  std::string output_topic_;
-  std::string prefix_;
-  std::string target_frame_;
+  std::string prefix_1_, prefix_2_;
+  std::string voronoi_frame_;
+  std::string base_frame_;
+  std::string target_topic_;
+  bool debug_;
   // voronoi
   std::shared_ptr<container> container_;
   // log

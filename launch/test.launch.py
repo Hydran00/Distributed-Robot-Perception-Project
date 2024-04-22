@@ -39,12 +39,37 @@ def generate_launch_description():
         arguments=["-d", rviz_config],
         parameters=[{"use_sim_time": True}]
     )
-    voronoi_calculator = Node(
+    voronoi_calculator_1 = Node(
+        package='project',
+        executable='voronoi_calculator',
+        name='voronoi_calculator_1',
+        output='screen',
+        parameters=[{"use_sim_time": True},
+        {"debug": True},
+        {"prefix_1": "1_"},
+        {"prefix_2": "2_"},
+        {"voronoi_frame": "world"},
+        {"input_frame": "camera"},
+        {"base_frame": "base_link"},
+        {"input_frame_other_robot": "camera"},
+        {"target_topic": "target_frame"},
+        ]
+    )
+    voronoi_calculator_2 = Node(
         package='project',
         executable='voronoi_calculator',
         output='screen',
+        name='voronoi_calculator_2',
         parameters=[{"use_sim_time": True},
-            ]
+        {"debug": True},
+        {"prefix_1": "2_"},
+        {"prefix_2": "1_"},
+        {"voronoi_frame": "world"},
+        {"input_frame": "camera"},
+        {"base_frame": "base_link"},
+        {"input_frame_other_robot": "camera"},
+        {"target_topic": "target_frame"},
+        ]
     )
     integrator = Node(
         package='project',
@@ -56,11 +81,28 @@ def generate_launch_description():
     integrator_t = TimerAction(period=2.0,
             actions=[integrator]
             )
-
+    static_broadcaster_1 = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments = ["--y", "-1.0", "--frame-id", "world", "--child-frame-id","1_base_link"],
+        parameters=[{"use_sim_time": True}],
+        output="log"
+    )
+    static_broadcaster_2 = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments = ["--y","1.0","--yaw", "-3.1416", "--frame-id", "world", "--child-frame-id", "2_base_link"],
+        parameters=[{"use_sim_time": True}],
+        output="log"
+    )
     node_list = [
         # pointcloud_accumulator,
         # rviz
-        voronoi_calculator
+        voronoi_calculator_1,
+        voronoi_calculator_2,
+        static_broadcaster_1,
+        static_broadcaster_2,
+        
         ]
     return LaunchDescription(node_list )#+ [integrator_t])    
 
