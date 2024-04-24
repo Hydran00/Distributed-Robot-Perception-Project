@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <numeric>
 #include <tuple>
@@ -35,13 +36,13 @@ double multivariate_gaussian_pdf(Eigen::Vector3d point, Eigen::Vector3d mean,
 }
 
 Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
-    std::vector<Eigen::Vector3d>& vertices,
+    std::vector<Eigen::Vector3d> &vertices,
     std::shared_ptr<voro::container> con, int cell_idx) {
   Eigen::Vector3d result(3);
   result << 0, 0, 0;
 
-  // std::cout << "Vertices: " << vertices.size() << std::endl;
-  // std::cout << "Cell idx: " << cell_idx << std::endl;
+
+
 
   double xmin = std::numeric_limits<double>::max(),
          xmax = std::numeric_limits<double>::min();
@@ -51,7 +52,7 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
          zmax = std::numeric_limits<double>::min();
 
   // reduce the enclosing box for computing integral
-  for (const auto& vertex : vertices) {
+  for (const auto &vertex : vertices) {
     xmin = std::min(xmin, vertex(0));
     xmax = std::max(xmax, vertex(0));
     ymin = std::min(ymin, vertex(1));
@@ -91,14 +92,15 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
 Eigen::Vector3d compute_center(std::vector<Eigen::Vector3d> vertices) {
   Eigen::Vector3d center(3);
   center << 0, 0, 0;
-  for (auto const& vertex : vertices) {
+  for (auto const &vertex : vertices) {
     center += vertex;
   }
   return center / vertices.size();
 };
+
 // passing array
 void init_icosahedron_planes(
-    std::vector<std::shared_ptr<voro::wall_plane>>& walls, int scale = 1) {
+    std::vector<std::shared_ptr<voro::wall_plane>> &walls, int scale = 1) {
   const double Phi = 0.5 * (1 + sqrt(5.0));
   const double phi = 0.5 * (1 - sqrt(5.0));
   std::shared_ptr<voro::wall_plane> p1 =
@@ -163,4 +165,86 @@ void init_icosahedron_planes(
   walls.push_back(p20);
 }
 
+// computes the vertices of the faces of a polyhedron (in this case a
+// icosaedron)
+std::map<int, std::vector<Eigen::Vector3d>> compute_subdivided_polyhedron(
+    std::unique_ptr<voro::container>& container, double scale) {
+  std::vector<std::shared_ptr<voro::wall_plane>> planes;
+  container->clear();
+  init_icosahedron_planes(planes, scale);
+  for (auto plane : planes) {
+    container->add_wall(*plane);
+  }
+  container->put(0, 0, 0, 0);
+
+  // print container
+  voro::c_loop_all clp(*container);
+  voro::voronoicell c_pdf;
+  if (clp.start()) do {
+      container->compute_cell(c_pdf, clp);
+    } while (clp.inc());
+  std::map<int, std::vector<int>> vertices_indeces;
+  std::vector<int> tmp;
+  c_pdf.face_vertices(tmp);
+
+  // //populate map
+
+  int length = 0;
+  int j = 0, k = 0;
+  for (int i = 0; i < tmp.size(); i += length + 1) {
+    length = tmp[i];
+    if (length == 0) {
+      break;
+    }
+    for (int j = i + 1; j < i + 1 + length; j++) {
+      vertices_indeces[k].push_back(tmp[j]);
+    }
+    k++;
+  }
+
+  std::map<int, std::vector<Eigen::Vector3d>> faces_vertices;
+  int i = 0;
+
+  std::vector<Eigen::Vector3d> vertices;
+  std::vector<double> tmp_v;
+
+  c_pdf.vertices(tmp_v);
+
+  for (int i = 0; i < tmp_v.size(); i += 3) {
+    vertices.push_back(Eigen::Vector3d(tmp_v[i], tmp_v[i + 1], tmp_v[i + 2]));
+  }
+
+  // loop face indices
+  for (auto const &face : vertices_indeces) {
+    std::vector<Eigen::Vector3d> face_vertices;
+    for (auto const &vertex_index : face.second) {
+      face_vertices.push_back(vertices[vertex_index]);
+    }
+    faces_vertices[face.first] = face_vertices;
+  }
+
+  // compute vertices for each face
+  std::map<int, std::vector<Eigen::Vector3d>> real_vertices;
+
+  // loop faces_vertices vertices indices
+  for (auto const &face : vertices_indeces) {
+    for (auto const &vertex_idx : face.second) {
+      real_vertices[face.first].push_back(vertices[vertex_idx]);
+    }
+  }
+
+  // print face vertices
+  int z = 0;
+  container->clear();
+  for (auto const &face : real_vertices) {
+    Eigen::Vector3d center = 0.5 * compute_center(face.second);
+    if (container->point_inside(center.x(), center.y(), center.z())) {
+      container->put(z, center.x(), center.y(), center.z());
+    }
+    z++;
+  }
+  container->draw_cells_gnuplot("pdf_polyhedron.gnu");
+
+  return real_vertices;
+}
 #endif

@@ -17,7 +17,6 @@
 // tf2
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-#include <unistd.h>
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
@@ -69,7 +68,8 @@ class VoronoiCalculator : public rclcpp::Node {
     container_ = std::make_shared<container>(
         con_size_xmin, con_size_xmax, con_size_ymin, con_size_ymax,
         con_size_zmin, con_size_zmax, 5, 5, 5, false, false, false, 8);
-    container_pdf_ = std::make_shared<container>(
+    
+    container_pdf_ = std::make_unique<container>(
         con_size_xmin, con_size_xmax, con_size_ymin, con_size_ymax,
         con_size_zmin, con_size_zmax, 5, 5, 5, false, false, false, 8);
 
@@ -96,16 +96,96 @@ class VoronoiCalculator : public rclcpp::Node {
 
     // sphere = std::make_shared<wall_sphere>(0, 0, 0, 1.0);
     // create_icosahedron(container_, 1);
+    
 
     init_icosahedron_planes(planes_, 1);
     for (auto plane : planes_) {
       container_->add_wall(*plane);
     }
-    for (auto plane : planes_) {
+
+    // prepare outer polyhedron
+    // compute_subdivided_polyhedron(container_pdf_, 1.0);
+
+    // ========================================================
+    double scale = 1.0;
+    std::vector<std::shared_ptr<voro::wall_plane>> planes;
+    container_pdf_->clear();
+    init_icosahedron_planes(planes, scale);
+    for (auto plane : planes) {
       container_pdf_->add_wall(*plane);
     }
-    container_pdf_->import("sphere_points.dat");
-    std::cout << "Voronoi calculator initialized" << std::endl;
+    container_pdf_->put(0, 0, 0, 0);
+
+    // print container
+    voro::c_loop_all clp(*container_pdf_);
+    voro::voronoicell c_pdf;
+    if (clp.start()) do {
+        container_pdf_->compute_cell(c_pdf, clp);
+      } while (clp.inc());
+    std::map<int, std::vector<int>> vertices_indeces;
+    std::vector<int> tmp;
+    c_pdf.face_vertices(tmp);
+
+    // //populate map
+
+    int length = 0;
+    int j = 0, k = 0;
+    for (int i = 0; i < tmp.size(); i += length + 1) {
+      length = tmp[i];
+      if (length == 0) {
+        break;
+      }
+      for (int j = i + 1; j < i + 1 + length; j++) {
+        vertices_indeces[k].push_back(tmp[j]);
+      }
+      k++;
+    }
+
+    std::map<int, std::vector<Eigen::Vector3d>> faces_vertices;
+    int i = 0;
+
+    std::vector<Eigen::Vector3d> vertices;
+    std::vector<double> tmp_v;
+
+    c_pdf.vertices(tmp_v);
+
+    for (int i = 0; i < tmp_v.size(); i += 3) {
+      vertices.push_back(Eigen::Vector3d(tmp_v[i], tmp_v[i + 1], tmp_v[i + 2]));
+    }
+
+    // loop face indices
+    for (auto const &face : vertices_indeces) {
+      std::vector<Eigen::Vector3d> face_vertices;
+      for (auto const &vertex_index : face.second) {
+        face_vertices.push_back(vertices[vertex_index]);
+      }
+      faces_vertices[face.first] = face_vertices;
+    }
+
+    // compute vertices for each face
+    std::map<int, std::vector<Eigen::Vector3d>> real_vertices;
+
+    // loop faces_vertices vertices indices
+    for (auto const &face : vertices_indeces) {
+      for (auto const &vertex_idx : face.second) {
+        real_vertices[face.first].push_back(vertices[vertex_idx]);
+      }
+    }
+
+    // print face vertices
+    int z = 0;
+    container_pdf_->clear();
+    for (auto const &face : real_vertices) {
+      Eigen::Vector3d center = 0.5 * compute_center(face.second);
+      if (container_pdf_->point_inside(center.x(), center.y(), center.z())) {
+        container_pdf_->put(z, center.x(), center.y(), center.z());
+      }
+      z++;
+    }
+    // container_pdf_->draw_cells_gnuplot("pdf_polyhedron.gnu");
+    // ========================================================
+
+    container_pdf_->draw_cells_gnuplot("pdf_polyhedron.gnu");
   }
 
  private:
@@ -134,8 +214,6 @@ class VoronoiCalculator : public rclcpp::Node {
                         r2_pose_.transform.translation.y,
                         r2_pose_.transform.translation.z);
       }
-      container_pdf_->clear();
-      container_pdf_->put(0, 0, 0, 0);
       double x, y, z, rx, ry, rz;
       int j, current_cell_idx = 0;
 
@@ -190,93 +268,8 @@ class VoronoiCalculator : public rclcpp::Node {
           vertices.clear();
         }
         if (debug_) {
-          // print container
-          FILE *f1 = safe_fopen((prefix_1_ + "PART.gnu").c_str(), "w");
-          // manually store particles
-          // fprintf(f1, "%d %g %g %g\n", 0, r1_x, r1_y, r1_z);
-          // fprintf(f1, "%d %g %g %g\n", 1, r2_x, r2_y, r2_z);
-          fclose(f1);
-          container_->draw_cells_gnuplot((prefix_1_ + "voronoi.gnu").c_str());
-          container_pdf_->draw_cells_gnuplot(
-              (prefix_1_ + "voronoi_pdf.gnu").c_str());
-          c_loop_all clp(*container_pdf_);
-          voronoicell c_pdf;
-          if (clp.start()) do {
-              if (container_pdf_->compute_cell(c_pdf, clp)) {
-                clp.pos(j, x, y, z, rx);
-                // c_pdf.output_face_vertices();
-                // v.output_vertices()
-                // extract vertices indices
-              }
-            } while (clp.inc());
-
-          std::map<int, std::vector<int>> vertices_indeces;
-          std::vector<int> tmp;
-          c_pdf.face_vertices(tmp);
-
-          // //populate map
-          int length = 0;
-          int j = 0, k = 0;
-          for (int i = 0; i < tmp.size(); i += length + 1) {
-            length = tmp[i];
-            if (length == 0) {
-              break;
-            }
-            for (int j = i + 1; j < i + 1 + length; j++) {
-              vertices_indeces[k].push_back(tmp[j]);
-            }
-            k++;
-          }
-          std::map<int, std::vector<Eigen::Vector3d>> faces_vertices;
-          int i = 0;
-
-          std::vector<Eigen::Vector3d> vertices;
-          std::vector<double> tmp_v;
-          c_pdf.vertices(tmp_v);
-          for (int i = 0; i < tmp_v.size(); i += 3) {
-            vertices.push_back(
-                Eigen::Vector3d(tmp_v[i], tmp_v[i + 1], tmp_v[i + 2]));
-          }
-          // loop face indices
-          for (auto const &face : vertices_indeces) {
-            std::vector<Eigen::Vector3d> face_vertices;
-            for (auto const &vertex_index : face.second) {
-              face_vertices.push_back(vertices[vertex_index]);
-            }
-            faces_vertices[face.first] = face_vertices;
-          }
-
-          // compute vertices for each face
-          std::map<int, std::vector<Eigen::Vector3d>> real_vertices;
-
-          // loop faces_vertices vertices indices
-          for (auto const &face : vertices_indeces) {
-            for (auto const &vertex_idx : face.second) {
-              real_vertices[face.first].push_back(vertices[vertex_idx]);
-            }
-          }
-          // print face vertices
-          int z = 0;
-          container_pdf_->clear();
-          FILE *f3 = safe_fopen((prefix_1_ + "face_.gnu").c_str(), "w");
-          for (auto const &face : real_vertices) {
-            Eigen::Vector3d center = 0.5 * compute_center(face.second);
-            if (container_pdf_->point_inside(center.x(), center.y(),
-                                             center.z())) {
-              container_pdf_->put(z, center.x(), center.y(), center.z());
-              fprintf(f3, "%g %g %g\n", center.x(), center.y(), center.z());
-            }
-            z++;
-          }
-          // container_pdf_->put(0, 0, 0, -0.50);
-          // container_pdf_->put(1, 0, 0, 0.5);
-          container_pdf_->draw_cells_gnuplot(
-              (prefix_1_ + "voronoi_pdf_faces.gnu").c_str());
-          fclose(f3);
-          std::cout << "Voronoi vertices published" << std::endl;
         }
       }
-
     } catch (tf2::TransformException &ex) {
       RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
                    ex.what());
@@ -324,7 +317,8 @@ class VoronoiCalculator : public rclcpp::Node {
   std::string target_topic_;
   bool debug_;
   // voronoi
-  std::shared_ptr<container> container_, container_pdf_;
+  std::shared_ptr<container> container_;
+  std::unique_ptr<container> container_pdf_;
   std::vector<std::shared_ptr<voro::wall_plane>> planes_;
   std::shared_ptr<voro::wall_sphere> sphere;
   // log
