@@ -21,6 +21,8 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "tf2/convert.h"
+
+#define N 20
 using namespace std;
 using namespace voro;
 using namespace std::chrono_literals;
@@ -68,7 +70,7 @@ class VoronoiCalculator : public rclcpp::Node {
     container_ = std::make_shared<container>(
         con_size_xmin, con_size_xmax, con_size_ymin, con_size_ymax,
         con_size_zmin, con_size_zmax, 5, 5, 5, false, false, false, 8);
-    
+
     container_pdf_ = std::make_unique<container>(
         con_size_xmin, con_size_xmax, con_size_ymin, con_size_ymax,
         con_size_zmin, con_size_zmax, 5, 5, 5, false, false, false, 8);
@@ -96,7 +98,6 @@ class VoronoiCalculator : public rclcpp::Node {
 
     // sphere = std::make_shared<wall_sphere>(0, 0, 0, 1.0);
     // create_icosahedron(container_, 1);
-    
 
     init_icosahedron_planes(planes_, 1);
     for (auto plane : planes_) {
@@ -179,13 +180,28 @@ class VoronoiCalculator : public rclcpp::Node {
       Eigen::Vector3d center = 0.5 * compute_center(face.second);
       if (container_pdf_->point_inside(center.x(), center.y(), center.z())) {
         container_pdf_->put(z, center.x(), center.y(), center.z());
+        centers_.push_back(center);
       }
       z++;
     }
-    // container_pdf_->draw_cells_gnuplot("pdf_polyhedron.gnu");
-    // ========================================================
+    c_loop_all clp2(*container_pdf_);
+    voronoicell c_pdf2;
+    i = 0;
+
+    // compute normals given centers
+    for (auto center : centers_) {
+      // consider vector from center to origin
+      Eigen::Vector3d normal = -center;
+      normal.normalize();
+      normals_.push_back(normal);
+    }
+
+    // INIT PDF
 
     container_pdf_->draw_cells_gnuplot("pdf_polyhedron.gnu");
+    for (size_t i = 0; i < N; i++) {
+      pdf_coeffs_.push_back(0.0);
+    }
   }
 
  private:
@@ -242,10 +258,29 @@ class VoronoiCalculator : public rclcpp::Node {
             }
           }
         } while (cla.inc());
+
+      // extract
+
       if (vertices.size() > 0) {
         if (debug_) {
           publish_voronoi_vertices(vertices);
         }
+        // compute the robot's orientation in angle axis
+        Eigen::Quaterniond quat(r1_pose_.transform.rotation.w,
+                                r1_pose_.transform.rotation.x,
+                                r1_pose_.transform.rotation.y,
+                                r1_pose_.transform.rotation.z);
+        Eigen::AngleAxisd axis_angle(quat.toRotationMatrix());
+        std::cout << "axis_angle: " << axis_angle.angle() << std::endl;
+        Eigen::Vector3d axis = axis_angle.axis();
+
+        // compute the pdf coefficient
+        for(size_t i = 0; i < N; i++) {
+          // TODO: update the value
+          pdf_coeffs_[i] = angleBetweenNormals(normals_[i], axis) / M_PI;
+          std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] << std::endl;
+        }
+
         auto res = integrate_vector_valued_pdf_over_polyhedron(vertices,
                                                                container_, j);
         // publish the result
@@ -266,8 +301,6 @@ class VoronoiCalculator : public rclcpp::Node {
         // target_pub_->publish(pose_);
         if (vertices.size() > 0) {
           vertices.clear();
-        }
-        if (debug_) {
         }
       }
     } catch (tf2::TransformException &ex) {
@@ -321,6 +354,9 @@ class VoronoiCalculator : public rclcpp::Node {
   std::unique_ptr<container> container_pdf_;
   std::vector<std::shared_ptr<voro::wall_plane>> planes_;
   std::shared_ptr<voro::wall_sphere> sphere;
+  std::vector<Eigen::Vector3d> centers_;
+  std::vector<Eigen::Vector3d> normals_;
+  std::vector<double> pdf_coeffs_;
   // log
 };
 

@@ -247,4 +247,17 @@ std::map<int, std::vector<Eigen::Vector3d>> compute_subdivided_polyhedron(
 
   return real_vertices;
 }
+
+double angleBetweenNormals(const Eigen::Vector3d& normal1, const Eigen::Vector3d& normal2) {
+    // Compute the dot product of the two normals
+    double dotProduct = normal1.dot(normal2);
+
+    // Ensure dot product is within valid range [-1, 1]
+    dotProduct = std::max(-1.0, std::min(1.0, dotProduct));
+
+    // Compute the angle in radians using arccosine
+    return std::acos(dotProduct);
+
+}
+
 #endif
