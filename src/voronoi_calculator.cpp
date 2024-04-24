@@ -23,6 +23,7 @@
 #include "tf2/convert.h"
 
 #define N 20
+
 using namespace std;
 using namespace voro;
 using namespace std::chrono_literals;
@@ -278,27 +279,34 @@ class VoronoiCalculator : public rclcpp::Node {
         for(size_t i = 0; i < N; i++) {
           // TODO: update the value
           pdf_coeffs_[i] = angleBetweenNormals(normals_[i], axis) / M_PI;
-          std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] << std::endl;
+          // std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] << std::endl;
         }
 
-        auto res = integrate_vector_valued_pdf_over_polyhedron(vertices,
-                                                               container_, j);
+        // auto res = integrate_vector_valued_pdf_over_polyhedron(vertices,
+        //                                                        container_, j);
         // publish the result
         pose_.header.stamp = this->now();
         pose_.header.frame_id = voronoi_frame_;
-        pose_.pose.position.x = res(0);
-        pose_.pose.position.y = res(1);
-        pose_.pose.position.z = res(2);
+        pose_.pose.position.x = 0.1 * sin(this->now().nanoseconds() / 1e9) + r1_x;//res(0);
+        pose_.pose.position.y = r1_y;//res(1);
+        pose_.pose.position.z = r1_z;//res(2);
         auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
                                                    tf2::TimePointZero);
-        tf2::doTransform(pose_, pose_, trans);
-        // apply orientation
-        pose_.pose.orientation.x = -0.707;
-        pose_.pose.orientation.y = 0.0;
-        pose_.pose.orientation.z = 0.0;
-        pose_.pose.orientation.w = 0.707;
+        // apply orientation so that the robot is always facing the center (0,0,0)
+        // create quaternion from axis angle with no rotation
 
-        // target_pub_->publish(pose_);
+        std::cout <<" x: " << r1_x << "\n y: " << r1_y << "\n z: " << r1_z << std::endl;
+
+        Eigen::AngleAxisd angle_axis(0, Eigen::Vector3d(0, 0, -1).normalized());
+        Eigen::Quaterniond q(angle_axis);
+        pose_.pose.orientation.x = q.x();
+        pose_.pose.orientation.y = q.y();
+        pose_.pose.orientation.z = q.z();
+        pose_.pose.orientation.w = q.w();
+        std::cout << " AA: " << angle_axis.angle() << " "<< angle_axis.axis().transpose() << std::endl;
+        
+        tf2::doTransform(pose_, pose_, trans);
+        target_pub_->publish(pose_);
         if (vertices.size() > 0) {
           vertices.clear();
         }
