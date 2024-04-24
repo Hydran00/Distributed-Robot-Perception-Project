@@ -21,12 +21,11 @@ Eigen::VectorXd test_pdf(double x, double y, double z) {
 }
 
 // Multivariate Gaussian PDF in R^3
-double multivariate_gaussian_pdf(Eigen::Vector3d point,
-                                          Eigen::Vector3d mean,
-                                          Eigen::Matrix3d covariance) {
+double multivariate_gaussian_pdf(Eigen::Vector3d point, Eigen::Vector3d mean,
+                                 Eigen::Matrix3d covariance) {
   Eigen::Vector3d diff = point - mean;
   double radius = 0.3;
-  if(point.norm() > radius) {
+  if (point.norm() > radius) {
     return 0;
   }
   double exponent = -0.5 * diff.transpose() * covariance.inverse() * diff;
@@ -67,7 +66,7 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
   int tot = 0;
   double mass = 0, pdf = 0;
   // double cube_vol = pow(h, 3);
-  Eigen::Vector3d com = Eigen::Vector3d::Zero(); //center of mass
+  Eigen::Vector3d com = Eigen::Vector3d::Zero();  // center of mass
   for (double ix = xmin + h / 2; ix < xmax; ix += h) {
     for (double iy = ymin + h / 2; iy < ymax; iy += h) {
       for (double iz = zmin + h / 2; iz < zmax; iz += h) {
@@ -78,15 +77,81 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
         point << x, y, z;
         if (con->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
           pdf = multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 1.0),
-                                              Eigen::Matrix3d::Identity());
+                                          Eigen::Matrix3d::Identity());
           mass += pdf;
-          com += pdf * point ;
+          com += pdf * point;
         }
       }
     }
   }
   // TODO: check that in equation 7 we can omit volume h^3
   return (1 / mass) * com;
+}
+// passing array
+void init_icosahedron_planes(
+    std::vector<std::shared_ptr<voro::wall_plane>>& walls, int scale = 1) {
+  const double Phi = 0.5 * (1 + sqrt(5.0));
+  const double phi = 0.5 * (1 - sqrt(5.0));
+  std::shared_ptr<voro::wall_plane> p1 =
+      std::make_shared<voro::wall_plane>(1, 1, 1, scale);
+  walls.push_back(p1);
+  std::shared_ptr<voro::wall_plane> p2 =
+      std::make_shared<voro::wall_plane>(-1, 1, 1, scale);
+  walls.push_back(p2);
+  std::shared_ptr<voro::wall_plane> p3 =
+      std::make_shared<voro::wall_plane>(1, -1, 1, scale);
+  walls.push_back(p3);
+  std::shared_ptr<voro::wall_plane> p4 =
+      std::make_shared<voro::wall_plane>(-1, -1, 1, scale);
+  walls.push_back(p4);
+  std::shared_ptr<voro::wall_plane> p5 =
+      std::make_shared<voro::wall_plane>(1, 1, -1, scale);
+  walls.push_back(p5);
+  std::shared_ptr<voro::wall_plane> p6 =
+      std::make_shared<voro::wall_plane>(-1, 1, -1, scale);
+  walls.push_back(p6);
+  std::shared_ptr<voro::wall_plane> p7 =
+      std::make_shared<voro::wall_plane>(1, -1, -1, scale);
+  walls.push_back(p7);
+  std::shared_ptr<voro::wall_plane> p8 =
+      std::make_shared<voro::wall_plane>(-1, -1, -1, scale);
+  walls.push_back(p8);
+  std::shared_ptr<voro::wall_plane> p9 =
+      std::make_shared<voro::wall_plane>(0, phi, Phi, scale);
+  walls.push_back(p9);
+  std::shared_ptr<voro::wall_plane> p10 =
+      std::make_shared<voro::wall_plane>(0, phi, -Phi, scale);
+  walls.push_back(p10);
+  std::shared_ptr<voro::wall_plane> p11 =
+      std::make_shared<voro::wall_plane>(0, -phi, Phi, scale);
+  walls.push_back(p11);
+  std::shared_ptr<voro::wall_plane> p12 =
+      std::make_shared<voro::wall_plane>(0, -phi, -Phi, scale);
+  walls.push_back(p12);
+  std::shared_ptr<voro::wall_plane> p13 =
+      std::make_shared<voro::wall_plane>(Phi, 0, phi, scale);
+  walls.push_back(p13);
+  std::shared_ptr<voro::wall_plane> p14 =
+      std::make_shared<voro::wall_plane>(Phi, 0, -phi, scale);
+  walls.push_back(p14);
+  std::shared_ptr<voro::wall_plane> p15 =
+      std::make_shared<voro::wall_plane>(-Phi, 0, phi, scale);
+  walls.push_back(p15);
+  std::shared_ptr<voro::wall_plane> p16 =
+      std::make_shared<voro::wall_plane>(-Phi, 0, -phi, scale);
+  walls.push_back(p16);
+  std::shared_ptr<voro::wall_plane> p17 =
+      std::make_shared<voro::wall_plane>(phi, Phi, 0, scale);
+  walls.push_back(p17);
+  std::shared_ptr<voro::wall_plane> p18 =
+      std::make_shared<voro::wall_plane>(phi, -Phi, 0, scale);
+  walls.push_back(p18);
+  std::shared_ptr<voro::wall_plane> p19 =
+      std::make_shared<voro::wall_plane>(-phi, Phi, 0, scale);
+  walls.push_back(p19);
+  std::shared_ptr<voro::wall_plane> p20 =
+      std::make_shared<voro::wall_plane>(-phi, -Phi, 0, scale);
+  walls.push_back(p20);
 }
 
 #endif

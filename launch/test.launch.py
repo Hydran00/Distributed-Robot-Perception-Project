@@ -99,9 +99,9 @@ def generate_launch_description():
         # pointcloud_accumulator,
         # rviz
         voronoi_calculator_1,
-        voronoi_calculator_2,
-        static_broadcaster_1,
-        static_broadcaster_2,
+        # voronoi_calculator_2,
+        # static_broadcaster_1,
+        # static_broadcaster_2,
         
         ]
     return LaunchDescription(node_list )#+ [integrator_t])    

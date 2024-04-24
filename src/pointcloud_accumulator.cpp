@@ -157,12 +157,12 @@ private:
         {
             if (id == 1)
             {
-                transform_1_ = tf_buffer_1_->lookupTransform(target_frame, source_frame, stamp);
+                transform_1_ = tf_buffer_1_->lookupTransform(target_frame, source_frame, tf2::TimePointZero);
                 pcl_ros::transformAsMatrix(transform_1_, eigen_transform_1_);
             }
             else
             {
-                transform_2_ = tf_buffer_2_->lookupTransform(target_frame, source_frame, stamp);
+                transform_2_ = tf_buffer_2_->lookupTransform(target_frame, source_frame, tf2::TimePointZero);
                 pcl_ros::transformAsMatrix(transform_2_, eigen_transform_2_);
             }
             return true;
