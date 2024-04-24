@@ -87,6 +87,15 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
   // TODO: check that in equation 7 we can omit volume h^3
   return (1 / mass) * com;
 }
+
+Eigen::Vector3d compute_center(std::vector<Eigen::Vector3d> vertices) {
+  Eigen::Vector3d center(3);
+  center << 0, 0, 0;
+  for (auto const& vertex : vertices) {
+    center += vertex;
+  }
+  return center / vertices.size();
+};
 // passing array
 void init_icosahedron_planes(
     std::vector<std::shared_ptr<voro::wall_plane>>& walls, int scale = 1) {

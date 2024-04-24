@@ -207,56 +207,73 @@ class VoronoiCalculator : public rclcpp::Node {
                 // c_pdf.output_face_vertices();
                 // v.output_vertices()
                 // extract vertices indices
-
-                std::map<int, std::vector<int>> vertices_indeces;
-                std::vector<int> tmp;
-                c_pdf.face_vertices(tmp);
-                // print tmp
-                for(int i = 0; i < tmp.size(); i++){
-                  std::cout << tmp[i] << " ";
-                }
-
-                //populate map
-                int j = 0;
-                for(int i = 0; i < tmp.size(); i++){
-                    if(tmp[i] < 1){
-                      j++;
-                  }else{
-                    vertices_indeces[j].push_back(tmp[i]);
-                  }
-                }
-                std::cout << "/////" <<std::endl;
-                //print map   
-                for (auto const& x : vertices_indeces)
-                {
-                    std::cout << x.first << ": ";
-                    for (auto const& y : x.second)
-                    {
-                        std::cout << y << " ";
-                    }
-                    std::cout << std::endl;
-                }
-
-                //print vertices_indices
-                // for (auto vertex_index : vertices_indeces) {
-                //   std::cout << vertex_index << std::endl;
-                // }
-                // std::vector<Eigen::Vector3d> pts;
-                // for (double *ptsp = pts + 4; ptsp < pts + (p << 2); ptsp += 4) {
-                //   //  c->ptsp*0.5,c->ptsp[1]*0.5,c->ptsp[2]*0.5);
-                //   pts.push_back(c->ptsp * 0.5, c->ptsp[1] * 0.5,
-                //                 c->ptsp[2] * 0.5);
-                // }
-                // // compute vertices for each face
-                // std::vector<std::vector<Eigen::Vector3d>> face_vertices;
-                // for (auto vertex_index : vertices_indeces) {
-                //   face_vertices.push_back(pts[vertex_index]);
-                // }
-                // extract vertices coordinates
-
-                std::cout << std::endl;
               }
             } while (clp.inc());
+
+          std::map<int, std::vector<int>> vertices_indeces;
+          std::vector<int> tmp;
+          c_pdf.face_vertices(tmp);
+
+          // //populate map
+          int length = 0;
+          int j = 0, k = 0;
+          for (int i = 0; i < tmp.size(); i += length + 1) {
+            length = tmp[i];
+            if (length == 0) {
+              break;
+            }
+            for (int j = i + 1; j < i + 1 + length; j++) {
+              vertices_indeces[k].push_back(tmp[j]);
+            }
+            k++;
+          }
+          std::map<int, std::vector<Eigen::Vector3d>> faces_vertices;
+          int i = 0;
+
+          std::vector<Eigen::Vector3d> vertices;
+          std::vector<double> tmp_v;
+          c_pdf.vertices(tmp_v);
+          for (int i = 0; i < tmp_v.size(); i += 3) {
+            vertices.push_back(
+                Eigen::Vector3d(tmp_v[i], tmp_v[i + 1], tmp_v[i + 2]));
+          }
+          // loop face indices
+          for (auto const &face : vertices_indeces) {
+            std::vector<Eigen::Vector3d> face_vertices;
+            for (auto const &vertex_index : face.second) {
+              face_vertices.push_back(vertices[vertex_index]);
+            }
+            faces_vertices[face.first] = face_vertices;
+          }
+
+          // compute vertices for each face
+          std::map<int, std::vector<Eigen::Vector3d>> real_vertices;
+
+          // loop faces_vertices vertices indices
+          for (auto const &face : vertices_indeces) {
+            for (auto const &vertex_idx : face.second) {
+              real_vertices[face.first].push_back(vertices[vertex_idx]);
+            }
+          }
+          // print face vertices
+          int z = 0;
+          container_pdf_->clear();
+          FILE *f3 = safe_fopen((prefix_1_ + "face_.gnu").c_str(), "w");
+          for (auto const &face : real_vertices) {
+            Eigen::Vector3d center = 0.5 * compute_center(face.second);
+            if (container_pdf_->point_inside(center.x(), center.y(),
+                                             center.z())) {
+              container_pdf_->put(z, center.x(), center.y(), center.z());
+              fprintf(f3, "%g %g %g\n", center.x(), center.y(), center.z());
+            }
+            z++;
+          }
+          // container_pdf_->put(0, 0, 0, -0.50);
+          // container_pdf_->put(1, 0, 0, 0.5);
+          container_pdf_->draw_cells_gnuplot(
+              (prefix_1_ + "voronoi_pdf_faces.gnu").c_str());
+          fclose(f3);
+          std::cout << "Voronoi vertices published" << std::endl;
         }
       }
 
