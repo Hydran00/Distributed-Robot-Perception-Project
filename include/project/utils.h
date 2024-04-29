@@ -258,6 +258,24 @@ double angleBetweenNormals(const Eigen::Vector3d& normal1, const Eigen::Vector3d
     // Compute the angle in radians using arccosine
     return std::acos(dotProduct);
 
+
+
+}
+
+Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d& point, const Eigen::Vector3d& center) {
+    Eigen::Vector3d direction = (center - point).normalized();
+
+    // Compute rotation axis by projecting direction onto XY plane
+    Eigen::Vector3d projDirection = direction - direction.dot(Eigen::Vector3d::UnitZ()) * Eigen::Vector3d::UnitZ();
+    double projDirectionNorm = projDirection.norm();
+    Eigen::Vector3d axis = projDirectionNorm < 1e-5 ? Eigen::Vector3d::UnitZ().cross(Eigen::Vector3d::UnitX()) : projDirection.cross(Eigen::Vector3d::UnitZ());
+
+    // Compute rotation angle
+    double angle = -std::acos(direction.dot(Eigen::Vector3d::UnitZ()));
+
+    // Create quaternion
+    Eigen::Quaterniond q(Eigen::AngleAxisd(angle, axis.normalized()));
+    return q.normalized();
 }
 
 #endif

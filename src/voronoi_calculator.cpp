@@ -267,44 +267,54 @@ class VoronoiCalculator : public rclcpp::Node {
           publish_voronoi_vertices(vertices);
         }
         // compute the robot's orientation in angle axis
-        Eigen::Quaterniond quat(r1_pose_.transform.rotation.w,
-                                r1_pose_.transform.rotation.x,
-                                r1_pose_.transform.rotation.y,
-                                r1_pose_.transform.rotation.z);
+        Eigen::Quaterniond quat(
+            r1_pose_.transform.rotation.w, r1_pose_.transform.rotation.x,
+            r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z);
         Eigen::AngleAxisd axis_angle(quat.toRotationMatrix());
         std::cout << "axis_angle: " << axis_angle.angle() << std::endl;
         Eigen::Vector3d axis = axis_angle.axis();
 
         // compute the pdf coefficient
-        for(size_t i = 0; i < N; i++) {
+        for (size_t i = 0; i < N; i++) {
           // TODO: update the value
           pdf_coeffs_[i] = angleBetweenNormals(normals_[i], axis) / M_PI;
-          // std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] << std::endl;
+          // std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] <<
+          // std::endl;
         }
 
         // auto res = integrate_vector_valued_pdf_over_polyhedron(vertices,
-        //                                                        container_, j);
+        //                                                        container_,
+        //                                                        j);
         // publish the result
+        double sinx = 0.1 * sin(this->now().nanoseconds() / 1e9) + r1_x;
+        double siny = 0.07 * sin(this->now().nanoseconds() / 1e9) + r1_y;
+        double sinz = 0.05 * sin(this->now().nanoseconds() / 1e9) + r1_z;
         pose_.header.stamp = this->now();
         pose_.header.frame_id = voronoi_frame_;
-        pose_.pose.position.x = 0.1 * sin(this->now().nanoseconds() / 1e9) + r1_x;//res(0);
-        pose_.pose.position.y = r1_y;//res(1);
-        pose_.pose.position.z = r1_z;//res(2);
+        pose_.pose.position.x = sinx;
+        pose_.pose.position.y = siny;
+        pose_.pose.position.z = sinz;
         auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
                                                    tf2::TimePointZero);
-        // apply orientation so that the robot is always facing the center (0,0,0)
-        // create quaternion from axis angle with no rotation
+        // apply orientation so that the robot is always facing the center
+        // (0,0,0) create quaternion from axis angle with no rotation
 
-        std::cout <<" x: " << r1_x << "\n y: " << r1_y << "\n z: " << r1_z << std::endl;
+        std::cout << " x: " << r1_x << "\n y: " << r1_y << "\n z: " << r1_z
+                  << std::endl;
 
-        Eigen::AngleAxisd angle_axis(0, Eigen::Vector3d(0, 0, -1).normalized());
-        Eigen::Quaterniond q(angle_axis);
+        // Eigen::AngleAxisd angle_axis(M_PI, Eigen::Vector3d(0, 0,
+        // 1).normalized()); Eigen::Quaterniond q(angle_axis);
+        auto q = computeQuaternion(
+            Eigen::Vector3d(sinx, siny, sinz),
+            Eigen::Vector3d(0, 0, 0));
         pose_.pose.orientation.x = q.x();
         pose_.pose.orientation.y = q.y();
         pose_.pose.orientation.z = q.z();
         pose_.pose.orientation.w = q.w();
-        std::cout << " AA: " << angle_axis.angle() << " "<< angle_axis.axis().transpose() << std::endl;
-        
+
+        // std::cout << " AA: " << angle_axis.angle() << " "<<
+        // angle_axis.axis().transpose() << std::endl;
+
         tf2::doTransform(pose_, pose_, trans);
         target_pub_->publish(pose_);
         if (vertices.size() > 0) {
