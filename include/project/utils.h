@@ -6,6 +6,7 @@
 
 #include <Eigen/Dense>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -15,10 +16,10 @@
 
 #include "voro++.hh"
 
-Eigen::VectorXd test_pdf(double x, double y, double z) {
+double test_pdf(double x, double y, double z) {
   Eigen::VectorXd result(3);
-  result << x * y * z, x * y * z, x * y * z;
-  return result;
+  result << x * y * z;
+  return 1;
 }
 
 // Multivariate Gaussian PDF in R^3
@@ -37,12 +38,11 @@ double multivariate_gaussian_pdf(Eigen::Vector3d point, Eigen::Vector3d mean,
 
 Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
     std::vector<Eigen::Vector3d> &vertices,
-    std::shared_ptr<voro::container> con, int cell_idx) {
+    std::shared_ptr<voro::container> con,
+    std::shared_ptr<voro::container> con_pdf, int cell_idx,
+    std::vector<double> multipliers) {
   Eigen::Vector3d result(3);
   result << 0, 0, 0;
-
-
-
 
   double xmin = std::numeric_limits<double>::max(),
          xmax = std::numeric_limits<double>::min();
@@ -62,12 +62,16 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
   }
   double x, y, z, rx, ry, rz;
   Eigen::Vector3d point;
-  double h = 0.05;
-  int counter = 0;
+  double h = 0.2;
+
   int tot = 0;
   double mass = 0, pdf = 0;
   // double cube_vol = pow(h, 3);
   Eigen::Vector3d com = Eigen::Vector3d::Zero();  // center of mass
+  voro::c_loop_all cl(*con_pdf);
+  voro::voronoicell c;
+  int tmp_cell_idx;
+  bool success;
   for (double ix = xmin + h / 2; ix < xmax; ix += h) {
     for (double iy = ymin + h / 2; iy < ymax; iy += h) {
       for (double iz = zmin + h / 2; iz < zmax; iz += h) {
@@ -76,11 +80,25 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
         y = iy;
         z = iz;
         point << x, y, z;
-        if (con->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
-          pdf = multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 1.0),
-                                          Eigen::Matrix3d::Identity());
-          mass += pdf;
-          com += pdf * point;
+        // check if the point is inside the correct cell (one cell for each
+        // robot)
+        if (con->point_inside(x, y, z) &&
+            con->find_voronoi_cell(x, y, z, rx, ry, rz, tmp_cell_idx)) {
+          if (tmp_cell_idx != cell_idx) {
+            continue;
+          }
+          // std::endl;
+          if (con_pdf->find_voronoi_cell(x, y, z, rx, ry, rz, tmp_cell_idx)) {
+            // pdf = multipliers[tmp_cell_idx] * test_pdf(x, y, z);
+            // if ((1-multipliers[tmp_cell_idx]) < 0.6) {
+            //   continue;
+            // }
+            pdf = multipliers[tmp_cell_idx] * test_pdf(x, y, z);
+            // pdf = multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0.0),
+            //                                 10 * Eigen::Matrix3d::Identity());
+            mass += pdf;
+            com += pdf * point;
+          }
         }
       }
     }
@@ -168,7 +186,7 @@ void init_icosahedron_planes(
 // computes the vertices of the faces of a polyhedron (in this case a
 // icosaedron)
 std::map<int, std::vector<Eigen::Vector3d>> compute_subdivided_polyhedron(
-    std::unique_ptr<voro::container>& container, double scale) {
+    std::unique_ptr<voro::container> &container, double scale) {
   std::vector<std::shared_ptr<voro::wall_plane>> planes;
   container->clear();
   init_icosahedron_planes(planes, scale);
@@ -248,34 +266,46 @@ std::map<int, std::vector<Eigen::Vector3d>> compute_subdivided_polyhedron(
   return real_vertices;
 }
 
-double angleBetweenNormals(const Eigen::Vector3d& normal1, const Eigen::Vector3d& normal2) {
-    // Compute the dot product of the two normals
-    double dotProduct = normal1.dot(normal2);
+double angleBetweenNormals(const Eigen::Vector3d &normal1,
+                           const Eigen::Vector3d &normal2) {
+  auto normal1_ = normal1.normalized();
+  auto normal2_ = normal2.normalized();
 
-    // Ensure dot product is within valid range [-1, 1]
-    dotProduct = std::max(-1.0, std::min(1.0, dotProduct));
+  // Compute the dot product of the two normals
+  double dotProduct = normal1_.dot(normal2_);
 
-    // Compute the angle in radians using arccosine
-    return std::acos(dotProduct);
+  // Ensure dot product is within valid range [-1, 1]
+  dotProduct = std::clamp(dotProduct, -1.0, 1.0);
 
-
-
+  // Compute the angle in radians using arccosine
+  return std::acos(dotProduct);
 }
 
-Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d& point, const Eigen::Vector3d& center) {
-    Eigen::Vector3d direction = (center - point).normalized();
+Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
+                                     const Eigen::Vector3d &center) {
+  Eigen::Vector3d direction = (center - point).normalized();
 
-    // Compute rotation axis by projecting direction onto XY plane
-    Eigen::Vector3d projDirection = direction - direction.dot(Eigen::Vector3d::UnitZ()) * Eigen::Vector3d::UnitZ();
-    double projDirectionNorm = projDirection.norm();
-    Eigen::Vector3d axis = projDirectionNorm < 1e-5 ? Eigen::Vector3d::UnitZ().cross(Eigen::Vector3d::UnitX()) : projDirection.cross(Eigen::Vector3d::UnitZ());
+  // Compute rotation axis by projecting direction onto XY plane
+  Eigen::Vector3d projDirection =
+      direction -
+      direction.dot(Eigen::Vector3d::UnitZ()) * Eigen::Vector3d::UnitZ();
+  double projDirectionNorm = projDirection.norm();
+  Eigen::Vector3d axis =
+      projDirectionNorm < 1e-5
+          ? Eigen::Vector3d::UnitZ().cross(Eigen::Vector3d::UnitX())
+          : projDirection.cross(Eigen::Vector3d::UnitZ());
 
-    // Compute rotation angle
-    double angle = -std::acos(direction.dot(Eigen::Vector3d::UnitZ()));
+  // Compute rotation angle
+  double angle = -std::acos(direction.dot(Eigen::Vector3d::UnitZ()));
 
-    // Create quaternion
-    Eigen::Quaterniond q(Eigen::AngleAxisd(angle, axis.normalized()));
-    return q.normalized();
+  // Create quaternion
+  Eigen::Quaterniond q(Eigen::AngleAxisd(angle, axis.normalized()));
+  return q.normalized();
+}
+Eigen::Vector3d projectOnSphere(Eigen::Vector3d pose,
+double radius) {
+  auto pose_norm = pose.normalized();
+  return radius * pose_norm;
 }
 
 #endif

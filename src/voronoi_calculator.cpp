@@ -14,6 +14,8 @@
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
+#include "visualization_msgs/msg/marker.hpp"
 // tf2
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -87,6 +89,16 @@ class VoronoiCalculator : public rclcpp::Node {
           this->create_publisher<geometry_msgs::msg::PoseArray>(
               "/voronoi_vertices" + prefix_1_, 1);
     }
+    pdf_coeffs_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>(
+        "/pdf_coeffs" + prefix_1_, 1);
+    pdf_coeffs_sub_ =
+        this->create_subscription<std_msgs::msg::Float64MultiArray>(
+            "/pdf_coeffs" + prefix_2_, 1,
+            std::bind(&VoronoiCalculator::pdfCoeffsCallback, this,
+                      std::placeholders::_1));
+    publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
+        "triangle_list" + prefix_1_, 1);
+
     // print params
     RCLCPP_INFO(this->get_logger(), "DEBUG FLAG: %d", debug_);
     RCLCPP_INFO(this->get_logger(), "voronoi_frame: %s",
@@ -100,16 +112,16 @@ class VoronoiCalculator : public rclcpp::Node {
     // sphere = std::make_shared<wall_sphere>(0, 0, 0, 1.0);
     // create_icosahedron(container_, 1);
 
-    init_icosahedron_planes(planes_, 1);
+    init_icosahedron_planes(planes_, 2.0);
     for (auto plane : planes_) {
       container_->add_wall(*plane);
     }
-
+    // draw this voronoi
     // prepare outer polyhedron
     // compute_subdivided_polyhedron(container_pdf_, 1.0);
 
     // ========================================================
-    double scale = 1.0;
+    double scale = 2.0;
     std::vector<std::shared_ptr<voro::wall_plane>> planes;
     container_pdf_->clear();
     init_icosahedron_planes(planes, scale);
@@ -143,7 +155,6 @@ class VoronoiCalculator : public rclcpp::Node {
       k++;
     }
 
-    std::map<int, std::vector<Eigen::Vector3d>> faces_vertices;
     int i = 0;
 
     std::vector<Eigen::Vector3d> vertices;
@@ -161,23 +172,12 @@ class VoronoiCalculator : public rclcpp::Node {
       for (auto const &vertex_index : face.second) {
         face_vertices.push_back(vertices[vertex_index]);
       }
-      faces_vertices[face.first] = face_vertices;
+      faces_vertices_[face.first] = face_vertices;
     }
 
-    // compute vertices for each face
-    std::map<int, std::vector<Eigen::Vector3d>> real_vertices;
-
-    // loop faces_vertices vertices indices
-    for (auto const &face : vertices_indeces) {
-      for (auto const &vertex_idx : face.second) {
-        real_vertices[face.first].push_back(vertices[vertex_idx]);
-      }
-    }
-
-    // print face vertices
     int z = 0;
     container_pdf_->clear();
-    for (auto const &face : real_vertices) {
+    for (auto const &face : faces_vertices_) {
       Eigen::Vector3d center = 0.5 * compute_center(face.second);
       if (container_pdf_->point_inside(center.x(), center.y(), center.z())) {
         container_pdf_->put(z, center.x(), center.y(), center.z());
@@ -185,27 +185,38 @@ class VoronoiCalculator : public rclcpp::Node {
       }
       z++;
     }
-    c_loop_all clp2(*container_pdf_);
-    voronoicell c_pdf2;
-    i = 0;
+    // c_loop_all clp2(*container_pdf_);
+    // voronoicell c_pdf2;
+    // i = 0;
 
     // compute normals given centers
     for (auto center : centers_) {
       // consider vector from center to origin
-      Eigen::Vector3d normal = -center;
+      Eigen::Vector3d normal = center;
       normal.normalize();
       normals_.push_back(normal);
     }
 
     // INIT PDF
-
+    container_->put(0, 0, 0, 0);
+    container_->compute_all_cells();
+    // container_pdf_->put(0, 0, 0, 0);
+    // container_pdf_->compute_all_cells();
+    container_->draw_cells_gnuplot("starting_poly.gnu");
     container_pdf_->draw_cells_gnuplot("pdf_polyhedron.gnu");
     for (size_t i = 0; i < N; i++) {
       pdf_coeffs_.push_back(0.0);
     }
+    std::cout << "Node started correctly" << std::endl;
   }
 
  private:
+  void pdfCoeffsCallback(
+      const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
+    for (size_t i = 0; i < msg->data.size(); i++) {
+      pdf_coeffs_[i] = std::max(msg->data[i], pdf_coeffs_[i]);
+    }
+  }
   void updateVoronoi() {
     try {
       auto r1_pose_ = tf_buffer_1_->lookupTransform(
@@ -231,6 +242,7 @@ class VoronoiCalculator : public rclcpp::Node {
                         r2_pose_.transform.translation.y,
                         r2_pose_.transform.translation.z);
       }
+
       double x, y, z, rx, ry, rz;
       int j, current_cell_idx = 0;
 
@@ -271,41 +283,58 @@ class VoronoiCalculator : public rclcpp::Node {
             r1_pose_.transform.rotation.w, r1_pose_.transform.rotation.x,
             r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z);
         Eigen::AngleAxisd axis_angle(quat.toRotationMatrix());
-        std::cout << "axis_angle: " << axis_angle.angle() << std::endl;
+        // std::cout << "axis_angle: " << axis_angle.angle() << std::endl;
         Eigen::Vector3d axis = axis_angle.axis();
 
         // compute the pdf coefficient
         for (size_t i = 0; i < N; i++) {
           // TODO: update the value
-          pdf_coeffs_[i] = angleBetweenNormals(normals_[i], axis) / M_PI;
-          // std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] <<
-          // std::endl;
+          // std::cout << "Normals of face "<< i << ": " <<
+          // normals_[i].transpose() << std::endl;
+          pdf_coeffs_[i] = std::max(
+              angleBetweenNormals(normals_[i], axis) / M_PI, pdf_coeffs_[i]);
+          // std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i]
+          //           << std::endl;
         }
+        // publish the pdf coefficients
+        std_msgs::msg::Float64MultiArray msg;
+        msg.data = pdf_coeffs_;
+        for (size_t i = 0; i < N; i++) {
+          std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i]
+                    << std::endl;
+        }
+        std::cout << "====================" << std::endl;
+        pdf_coeffs_pub_->publish(msg);
+        publishTriangleList();
 
-        // auto res = integrate_vector_valued_pdf_over_polyhedron(vertices,
-        //                                                        container_,
-        //                                                        j);
+        auto res = integrate_vector_valued_pdf_over_polyhedron(
+            vertices, container_, container_pdf_, j, pdf_coeffs_);
         // publish the result
-        double sinx = 0.1 * sin(this->now().nanoseconds() / 1e9) + r1_x;
-        double siny = 0.07 * sin(this->now().nanoseconds() / 1e9) + r1_y;
-        double sinz = 0.05 * sin(this->now().nanoseconds() / 1e9) + r1_z;
+        // double sinx = 0.1 * sin(this->now().nanoseconds() / 1e9) + r1_x;
+        // double siny = 0.07 * sin(this->now().nanoseconds() / 1e9) + r1_y;
+        // double sinz = 0.05 * sin(this->now().nanoseconds() / 1e9) + r1_z;
         pose_.header.stamp = this->now();
         pose_.header.frame_id = voronoi_frame_;
-        pose_.pose.position.x = sinx;
-        pose_.pose.position.y = siny;
-        pose_.pose.position.z = sinz;
+        pose_.pose.position.x = res(0);  // r1_x;
+        pose_.pose.position.y = res(1);  // r1_y;
+        pose_.pose.position.z = res(2);  // r1_z;
+        std::cout << " x: " << res(0) << " y: " << res(1) << " z: " << res(2)
+                  << std::endl;
+        // project onto sphere surface
+
         auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
                                                    tf2::TimePointZero);
         // apply orientation so that the robot is always facing the center
         // (0,0,0) create quaternion from axis angle with no rotation
 
-        std::cout << " x: " << r1_x << "\n y: " << r1_y << "\n z: " << r1_z
-                  << std::endl;
+        // std::cout << " x: " << r1_x << "\n y: " << r1_y << "\n z: " << r1_z
+        //           << std::endl;
 
         // Eigen::AngleAxisd angle_axis(M_PI, Eigen::Vector3d(0, 0,
         // 1).normalized()); Eigen::Quaterniond q(angle_axis);
         auto q = computeQuaternion(
-            Eigen::Vector3d(sinx, siny, sinz),
+            Eigen::Vector3d(pose_.pose.position.x, pose_.pose.position.y,
+                            pose_.pose.position.z),
             Eigen::Vector3d(0, 0, 0));
         pose_.pose.orientation.x = q.x();
         pose_.pose.orientation.y = q.y();
@@ -316,7 +345,15 @@ class VoronoiCalculator : public rclcpp::Node {
         // angle_axis.axis().transpose() << std::endl;
 
         tf2::doTransform(pose_, pose_, trans);
-        target_pub_->publish(pose_);
+        // TODO check that the pose is outside of the sphere
+        auto new_pose =
+            Eigen::Vector3d(pose_.pose.position.x, pose_.pose.position.y,
+                            pose_.pose.position.z);
+        new_pose = projectOnSphere(new_pose, 0.6);
+        pose_.pose.position.x = new_pose(0);
+        pose_.pose.position.y = new_pose(1);
+        pose_.pose.position.z = new_pose(2);
+        // target_pub_->publish(pose_);
         if (vertices.size() > 0) {
           vertices.clear();
         }
@@ -342,11 +379,51 @@ class VoronoiCalculator : public rclcpp::Node {
 
     voronoi_vertices_pub_->publish(voronoi_vertices_);
   }
+  void publishTriangleList() {
+    auto marker_msg = std::make_shared<visualization_msgs::msg::Marker>();
+    marker_msg->header.frame_id = "world";
+    marker_msg->header.stamp = this->now();
+    marker_msg->ns = "triangle_list";
+    marker_msg->id = 0;
+    marker_msg->type = visualization_msgs::msg::Marker::TRIANGLE_LIST;
+    marker_msg->action = visualization_msgs::msg::Marker::ADD;
+    marker_msg->pose.orientation.w = 1.0;
+    marker_msg->scale.x = 1.0;
+    marker_msg->scale.y = 1.0;
+    marker_msg->scale.z = 1.0;
+    marker_msg->color.r = 1.0;
+    marker_msg->color.a = 1.0;
+
+    geometry_msgs::msg::Point p;
+    std_msgs::msg::ColorRGBA color;
+    for(size_t i = 0; i < N; i++) {
+      auto vertices = faces_vertices_[i];
+      for (size_t j = 0; j < vertices.size(); j++) {
+        p.x = vertices[j](0) / 6;
+        p.y = vertices[j](1) / 6;
+        p.z = vertices[j](2) / 6;
+        marker_msg->points.push_back(p);
+      }
+      color.r = 0.0;
+      color.g = pdf_coeffs_[i];
+      color.b = pdf_coeffs_[i];
+      color.a = 1.0;
+      marker_msg->colors.push_back(color);
+    }
+    std::cout << "/////////////////" << std::endl;
+
+    publisher_->publish(*marker_msg);
+  }
 
   // subscribers and publishers
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr
       voronoi_vertices_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr
+      pdf_coeffs_pub_;
+  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr
+      pdf_coeffs_sub_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
   // get robot end effector pose
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_1_, tf_buffer_2_;
@@ -368,12 +445,13 @@ class VoronoiCalculator : public rclcpp::Node {
   std::string target_topic_;
   bool debug_;
   // voronoi
-  std::shared_ptr<container> container_;
-  std::unique_ptr<container> container_pdf_;
+  std::shared_ptr<voro::container> container_;
+  std::shared_ptr<voro::container> container_pdf_;
   std::vector<std::shared_ptr<voro::wall_plane>> planes_;
   std::shared_ptr<voro::wall_sphere> sphere;
   std::vector<Eigen::Vector3d> centers_;
   std::vector<Eigen::Vector3d> normals_;
+  std::map<int, std::vector<Eigen::Vector3d>> faces_vertices_;
   std::vector<double> pdf_coeffs_;
   // log
 };

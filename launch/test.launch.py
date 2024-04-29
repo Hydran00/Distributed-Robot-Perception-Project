@@ -45,7 +45,7 @@ def generate_launch_description():
         name='voronoi_calculator_1',
         output='screen',
         parameters=[{"use_sim_time": True},
-        {"debug": False},
+        {"debug": True},
         {"prefix_1": "1_"},
         {"prefix_2": "2_"},
         {"voronoi_frame": "world"},
@@ -100,8 +100,8 @@ def generate_launch_description():
         # rviz
         voronoi_calculator_1,
         # voronoi_calculator_2,
-        static_broadcaster_1,
-        static_broadcaster_2,
+        # static_broadcaster_1,
+        # static_broadcaster_2,
         
         ]
     return LaunchDescription(node_list )#+ [integrator_t])    
