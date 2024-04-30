@@ -87,7 +87,7 @@ def generate_launch_description():
         # pointcloud_accumulator,
         # rviz
         voronoi_calculator_1,
-        # voronoi_calculator_2,
+        voronoi_calculator_2,
         
         ]
     return LaunchDescription(node_list)    

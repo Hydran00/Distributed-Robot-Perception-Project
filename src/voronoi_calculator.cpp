@@ -1,10 +1,3 @@
-// Example code demonstrating find_voronoi_cell function
-//
-// Author   : Chris H. Rycroft (LBL / UC Berkeley)
-// Email    : chr@alum.mit.edu
-// Date     : August 30th 2011
-
-#include <unistd.h>
 
 #include <iostream>
 
@@ -35,7 +28,6 @@ class VoronoiCalculator : public rclcpp::Node {
  public:
   VoronoiCalculator() : Node("voronoi_calculator") {
     // avoid storing the pointcloud if transform is not available
-    rclcpp::sleep_for(2s);
 
     this->declare_parameter("prefix_1", "");
     prefix_1_ = this->get_parameter("prefix_1").as_string();
