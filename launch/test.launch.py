@@ -44,6 +44,7 @@ def generate_launch_description():
         executable='voronoi_calculator',
         name='voronoi_calculator_1',
         output='screen',
+        # prefix=['xterm -e gdb -ex run --args'],
         parameters=[{"use_sim_time": True},
         {"debug": True},
         {"prefix_1": "1_"},

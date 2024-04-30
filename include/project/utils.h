@@ -93,9 +93,11 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
             // if ((1-multipliers[tmp_cell_idx]) < 0.6) {
             //   continue;
             // }
-            pdf = multipliers[tmp_cell_idx] * test_pdf(x, y, z);
-            // pdf = multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0.0),
-            //                                 10 * Eigen::Matrix3d::Identity());
+            pdf = (1 - multipliers[tmp_cell_idx]) * test_pdf(x, y, z);
+            // pdf = multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0,
+            // 0.0),
+            //                                 10 *
+            //                                 Eigen::Matrix3d::Identity());
             mass += pdf;
             com += pdf * point;
           }
@@ -272,13 +274,18 @@ double angleBetweenNormals(const Eigen::Vector3d &normal1,
   auto normal2_ = normal2.normalized();
 
   // Compute the dot product of the two normals
-  double dotProduct = normal1_.dot(normal2_);
+  // double dotProduct = normal1_.dot(normal2_);
 
-  // Ensure dot product is within valid range [-1, 1]
-  dotProduct = std::clamp(dotProduct, -1.0, 1.0);
+  // // Ensure dot product is within valid range [-1, 1]
+  // dotProduct = std::clamp(dotProduct, -1.0, 1.0);
 
-  // Compute the angle in radians using arccosine
-  return std::acos(dotProduct);
+  // // Compute the angle in radians using arccosine
+  // return std::acos(dotProduct);
+
+  // return euclidean distance
+  return sqrt(pow(normal1_(0) - normal2_(0), 2) +
+              pow(normal1_(1) - normal2_(1), 2) +
+              pow(normal1_(2) - normal2_(2), 2));
 }
 
 Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
@@ -302,10 +309,31 @@ Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
   Eigen::Quaterniond q(Eigen::AngleAxisd(angle, axis.normalized()));
   return q.normalized();
 }
-Eigen::Vector3d projectOnSphere(Eigen::Vector3d pose,
-double radius) {
+Eigen::Vector3d projectOnSphere(Eigen::Vector3d pose, double radius) {
   auto pose_norm = pose.normalized();
   return radius * pose_norm;
 }
 
+// Function to generate a blues colormap with normalized color values
+std::vector<double> generateBluesColormap(
+    int numColors, const std::vector<double> &randomArray) {
+  // Define the range of blue values
+  double startBlue = 0.12;
+  double endBlue = 1.0;
+
+  // Calculate the increment between each color
+  double increment = (endBlue - startBlue) / (numColors - 1);
+
+  // Generate the colormap
+  std::vector<double> coloredArray;
+  for (double value : randomArray) {
+    // Map the random value to the colormap index
+    int index = value * numColors;
+    // Calculate the current blue value
+    double blueValue = startBlue + (index * increment);
+    // Store the blue value in the colored array
+    coloredArray.push_back(blueValue);
+  }
+  return coloredArray;
+}
 #endif

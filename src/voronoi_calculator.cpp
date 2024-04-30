@@ -16,6 +16,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
+
 // tf2
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -96,8 +98,9 @@ class VoronoiCalculator : public rclcpp::Node {
             "/pdf_coeffs" + prefix_2_, 1,
             std::bind(&VoronoiCalculator::pdfCoeffsCallback, this,
                       std::placeholders::_1));
-    publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
-        "triangle_list" + prefix_1_, 1);
+    markers_publisher_ =
+        this->create_publisher<visualization_msgs::msg::MarkerArray>(
+            "markers" + prefix_1_, 1);
 
     // print params
     RCLCPP_INFO(this->get_logger(), "DEBUG FLAG: %d", debug_);
@@ -194,9 +197,9 @@ class VoronoiCalculator : public rclcpp::Node {
       // consider vector from center to origin
       Eigen::Vector3d normal = center;
       normal.normalize();
+      std::cout << "Norm is " << normal.norm() << std::endl;
       normals_.push_back(normal);
     }
-
     // INIT PDF
     container_->put(0, 0, 0, 0);
     container_->compute_all_cells();
@@ -215,14 +218,27 @@ class VoronoiCalculator : public rclcpp::Node {
       const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
     for (size_t i = 0; i < msg->data.size(); i++) {
       pdf_coeffs_[i] = std::max(msg->data[i], pdf_coeffs_[i]);
+      // pdf_coeffs_[i] = pdf_coeffs_[i];
     }
   }
   void updateVoronoi() {
     try {
+      std::cout << "Input frame: " << input_frame_ << std::endl;
+      std::cout << "voronoi frame: " << voronoi_frame_ << std::endl;
+
       auto r1_pose_ = tf_buffer_1_->lookupTransform(
           voronoi_frame_, input_frame_, tf2::TimePointZero, 10ms);
       auto r2_pose_ = tf_buffer_2_->lookupTransform(
           voronoi_frame_, input_frame_other_robot_, tf2::TimePointZero, 10ms);
+
+      std::cout << "real quat: \n"
+                << r1_pose_.transform.rotation.x << " "
+                << r1_pose_.transform.rotation.y << " "
+                << r1_pose_.transform.rotation.z
+                << r1_pose_.transform.rotation.w << std::endl;
+      Eigen::AngleAxisd angle_axis(Eigen::Quaterniond(
+          r1_pose_.transform.rotation.w, r1_pose_.transform.rotation.x,
+          r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z));
 
       const double r1_x = r1_pose_.transform.translation.x;
       const double r1_y = r1_pose_.transform.translation.y;
@@ -278,23 +294,18 @@ class VoronoiCalculator : public rclcpp::Node {
         if (debug_) {
           publish_voronoi_vertices(vertices);
         }
-        // compute the robot's orientation in angle axis
         Eigen::Quaterniond quat(
             r1_pose_.transform.rotation.w, r1_pose_.transform.rotation.x,
             r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z);
-        Eigen::AngleAxisd axis_angle(quat.toRotationMatrix());
-        // std::cout << "axis_angle: " << axis_angle.angle() << std::endl;
-        Eigen::Vector3d axis = axis_angle.axis();
-
+        auto rotmat = quat.toRotationMatrix();
+        // print third column
+        std::cout << "rotmat: " << rotmat.col(2).transpose() << std::endl;
         // compute the pdf coefficient
         for (size_t i = 0; i < N; i++) {
-          // TODO: update the value
-          // std::cout << "Normals of face "<< i << ": " <<
-          // normals_[i].transpose() << std::endl;
           pdf_coeffs_[i] = std::max(
-              angleBetweenNormals(normals_[i], axis) / M_PI, pdf_coeffs_[i]);
-          // std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i]
-          //           << std::endl;
+              angleBetweenNormals(normals_[i], rotmat.col(2).normalized()) /
+                  2.0,
+              pdf_coeffs_[i]);
         }
         // publish the pdf coefficients
         std_msgs::msg::Float64MultiArray msg;
@@ -310,17 +321,16 @@ class VoronoiCalculator : public rclcpp::Node {
         auto res = integrate_vector_valued_pdf_over_polyhedron(
             vertices, container_, container_pdf_, j, pdf_coeffs_);
         // publish the result
-        // double sinx = 0.1 * sin(this->now().nanoseconds() / 1e9) + r1_x;
-        // double siny = 0.07 * sin(this->now().nanoseconds() / 1e9) + r1_y;
-        // double sinz = 0.05 * sin(this->now().nanoseconds() / 1e9) + r1_z;
+        // project onto sphere surface
+        std::cout << " x: " << res(0) << " y: " << res(1) << " z: " << res(2)
+                  << std::endl;
+        res = projectOnSphere(res, 0.7);
+
         pose_.header.stamp = this->now();
         pose_.header.frame_id = voronoi_frame_;
         pose_.pose.position.x = res(0);  // r1_x;
         pose_.pose.position.y = res(1);  // r1_y;
         pose_.pose.position.z = res(2);  // r1_z;
-        std::cout << " x: " << res(0) << " y: " << res(1) << " z: " << res(2)
-                  << std::endl;
-        // project onto sphere surface
 
         auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
                                                    tf2::TimePointZero);
@@ -353,7 +363,7 @@ class VoronoiCalculator : public rclcpp::Node {
         pose_.pose.position.x = new_pose(0);
         pose_.pose.position.y = new_pose(1);
         pose_.pose.position.z = new_pose(2);
-        // target_pub_->publish(pose_);
+        target_pub_->publish(pose_);
         if (vertices.size() > 0) {
           vertices.clear();
         }
@@ -380,39 +390,111 @@ class VoronoiCalculator : public rclcpp::Node {
     voronoi_vertices_pub_->publish(voronoi_vertices_);
   }
   void publishTriangleList() {
-    auto marker_msg = std::make_shared<visualization_msgs::msg::Marker>();
-    marker_msg->header.frame_id = "world";
-    marker_msg->header.stamp = this->now();
-    marker_msg->ns = "triangle_list";
-    marker_msg->id = 0;
-    marker_msg->type = visualization_msgs::msg::Marker::TRIANGLE_LIST;
-    marker_msg->action = visualization_msgs::msg::Marker::ADD;
-    marker_msg->pose.orientation.w = 1.0;
-    marker_msg->scale.x = 1.0;
-    marker_msg->scale.y = 1.0;
-    marker_msg->scale.z = 1.0;
-    marker_msg->color.r = 1.0;
-    marker_msg->color.a = 1.0;
+    marker_array_.markers.clear();
+    visualization_msgs::msg::Marker mesh_msg;
+    mesh_msg.header.frame_id = "world";
+    mesh_msg.header.stamp = this->now();
+    mesh_msg.ns = prefix_1_;
+    mesh_msg.id = 0;
+    mesh_msg.type = visualization_msgs::msg::Marker::TRIANGLE_LIST;
+    mesh_msg.action = visualization_msgs::msg::Marker::MODIFY;
+    mesh_msg.scale.x = 1.0;
+    mesh_msg.scale.y = 1.0;
+    mesh_msg.scale.z = 1.0;
+    mesh_msg.color.r = 1.0;
+    mesh_msg.color.a = 1.0;
+
+    visualization_msgs::msg::Marker text_msg;
+    text_msg.header.frame_id = "world";
+    text_msg.header.stamp = this->now();
+    text_msg.ns = prefix_1_;
+    text_msg.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+    text_msg.action = visualization_msgs::msg::Marker::MODIFY;
+    text_msg.scale.z = 0.05;
+    text_msg.color.r = 1.0;
+    text_msg.color.g = 1.0;
+    text_msg.color.b = 1.0;
+    text_msg.color.a = 0.85;
+
+    visualization_msgs::msg::Marker arrow_msg;
+    arrow_msg.header.frame_id = "world";
+    arrow_msg.header.stamp = this->now();
+    arrow_msg.ns = prefix_1_;
+    arrow_msg.type = visualization_msgs::msg::Marker::ARROW;
+    arrow_msg.action = visualization_msgs::msg::Marker::MODIFY;
+    arrow_msg.scale.x = 0.02;
+    // arrow_msg.scale.y = 0.1;
+    arrow_msg.scale.z = 0.03;
+    arrow_msg.color.r = 1.0;
+    arrow_msg.color.g = 0.0;
+    arrow_msg.color.b = 0.0;
+    arrow_msg.color.a = 1.0;
+
+    std::vector<visualization_msgs::msg::Marker> texts;
+    std::vector<visualization_msgs::msg::Marker> arrows;
+    // generate colormap
+    std::vector<double> coloredArray =
+        generateBluesColormap((int)pdf_coeffs_.size(), pdf_coeffs_);
 
     geometry_msgs::msg::Point p;
+    geometry_msgs::msg::Point normal;
     std_msgs::msg::ColorRGBA color;
-    for(size_t i = 0; i < N; i++) {
+
+    for (int i = 0; i < N; i++) {
       auto vertices = faces_vertices_[i];
       for (size_t j = 0; j < vertices.size(); j++) {
         p.x = vertices[j](0) / 6;
         p.y = vertices[j](1) / 6;
         p.z = vertices[j](2) / 6;
-        marker_msg->points.push_back(p);
+        mesh_msg.points.push_back(p);
       }
       color.r = 0.0;
-      color.g = pdf_coeffs_[i];
-      color.b = pdf_coeffs_[i];
+      color.g = 0.0;
+      color.b = coloredArray[i];
       color.a = 1.0;
-      marker_msg->colors.push_back(color);
+      mesh_msg.colors.push_back(color);
+      text_msg.pose.position.x = centers_[i](0) / 2;
+      text_msg.pose.position.y = centers_[i](1) / 2;
+      text_msg.pose.position.z = centers_[i](2) / 2;
+      text_msg.text = std::to_string(i);
+      text_msg.id = i + 1;
+      texts.push_back(text_msg);
+      arrow_msg.points.clear();
+      normal.x = 0.0;
+      normal.y = 0.0;
+      normal.z = 0.0;
+      arrow_msg.points.push_back(normal);
+      normal.x = normals_[i](0);
+      normal.y = normals_[i](1);
+      normal.z = normals_[i](2);
+      arrow_msg.points.push_back(normal);
+      arrow_msg.id = N + i + 1;
+      arrows.push_back(arrow_msg);
     }
-    std::cout << "/////////////////" << std::endl;
+    // CURRENT ORIENTATION
+    arrow_msg.points.clear();
+    normal.x = 0.0;
+    normal.y = 0.0;
+    normal.z = 0.0;
+    arrow_msg.points.push_back(normal);
+    normal.x = current_axis_(0);
+    normal.y = current_axis_(1);
+    normal.z = current_axis_(2);
+    arrow_msg.points.push_back(normal);
+    arrow_msg.id = 2 * N + 1;
+    arrow_msg.color.g = 1.0;
+    arrow_msg.color.r = 0.0;
 
-    publisher_->publish(*marker_msg);
+    std::cout << "/////////////////" << std::endl;
+    marker_array_.markers.push_back(mesh_msg);
+    for (auto text : texts) {
+      marker_array_.markers.push_back(text);
+    }
+    for (auto arrow : arrows) {
+      marker_array_.markers.push_back(arrow);
+    }
+    marker_array_.markers.push_back(arrow_msg);
+    markers_publisher_->publish(marker_array_);
   }
 
   // subscribers and publishers
@@ -423,7 +505,8 @@ class VoronoiCalculator : public rclcpp::Node {
       pdf_coeffs_pub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr
       pdf_coeffs_sub_;
-  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+      markers_publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
   // get robot end effector pose
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_1_, tf_buffer_2_;
@@ -434,6 +517,8 @@ class VoronoiCalculator : public rclcpp::Node {
   geometry_msgs::msg::PoseArray voronoi_vertices_;
   geometry_msgs::msg::PoseStamped pose_;
   std::vector<Eigen::Vector3d> vertices;
+  visualization_msgs::msg::MarkerArray marker_array_;
+  Eigen::Vector3d current_axis_;
   bool cell_found_ = false;
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
   const double con_size_ymin = -2.0, con_size_ymax = 2.0;
