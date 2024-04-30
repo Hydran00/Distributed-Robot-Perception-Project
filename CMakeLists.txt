@@ -43,16 +43,9 @@ ament_target_dependencies(pointcloud_accumulator pcl_ros pcl_conversions rclcpp 
 
 target_link_libraries(pointcloud_accumulator ${PCL_LIBRARIES}) 
 
-
-################ Marker publisher ###########################################
-# add_executable(marker_publisher src/marker_publisher.cpp)
-# target_include_directories(integrator_test PUBLIC include/)
-# ament_target_dependencies(marker_publisher rclcpp geometry_msgs visualization_msgs)
-
 ################ Voronoi calculator ##############################
 
-add_executable(voronoi_calculator src/voronoi_calculator.cpp
-src/marker_publisher.cpp)
+add_executable(voronoi_calculator src/voronoi_calculator.cpp)
 
 find_file(libvoro_include NAMES "voro++/")
 # message(STATUS ${libvoro_include})
