@@ -82,29 +82,14 @@ def generate_launch_description():
     integrator_t = TimerAction(period=2.0,
             actions=[integrator]
             )
-    static_broadcaster_1 = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        arguments = ["--y", "-0.75", "--frame-id", "world", "--child-frame-id","1_base_link"],
-        parameters=[{"use_sim_time": True}],
-        output="log"
-    )
-    static_broadcaster_2 = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        arguments = ["--y","0.75","--yaw", "-3.1416", "--frame-id", "world", "--child-frame-id", "2_base_link"],
-        parameters=[{"use_sim_time": True}],
-        output="log"
-    )
+
     node_list = [
-        # pointcloud_accumulator,
+        pointcloud_accumulator,
         # rviz
         voronoi_calculator_1,
-        # voronoi_calculator_2,
-        # static_broadcaster_1,
-        # static_broadcaster_2,
+        voronoi_calculator_2,
         
         ]
-    return LaunchDescription(node_list )#+ [integrator_t])    
+    return LaunchDescription(node_list)    
 
 

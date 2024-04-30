@@ -197,7 +197,6 @@ class VoronoiCalculator : public rclcpp::Node {
       // consider vector from center to origin
       Eigen::Vector3d normal = center;
       normal.normalize();
-      std::cout << "Norm is " << normal.norm() << std::endl;
       normals_.push_back(normal);
     }
     // INIT PDF
@@ -223,19 +222,11 @@ class VoronoiCalculator : public rclcpp::Node {
   }
   void updateVoronoi() {
     try {
-      std::cout << "Input frame: " << input_frame_ << std::endl;
-      std::cout << "voronoi frame: " << voronoi_frame_ << std::endl;
-
       auto r1_pose_ = tf_buffer_1_->lookupTransform(
           voronoi_frame_, input_frame_, tf2::TimePointZero, 10ms);
       auto r2_pose_ = tf_buffer_2_->lookupTransform(
           voronoi_frame_, input_frame_other_robot_, tf2::TimePointZero, 10ms);
 
-      std::cout << "real quat: \n"
-                << r1_pose_.transform.rotation.x << " "
-                << r1_pose_.transform.rotation.y << " "
-                << r1_pose_.transform.rotation.z
-                << r1_pose_.transform.rotation.w << std::endl;
       Eigen::AngleAxisd angle_axis(Eigen::Quaterniond(
           r1_pose_.transform.rotation.w, r1_pose_.transform.rotation.x,
           r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z));
@@ -299,22 +290,31 @@ class VoronoiCalculator : public rclcpp::Node {
             r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z);
         auto rotmat = quat.toRotationMatrix();
         // print third column
-        std::cout << "rotmat: " << rotmat.col(2).transpose() << std::endl;
+
+
+        double max_value = 0.0;
+        double max_index = 0;
         // compute the pdf coefficient
         for (size_t i = 0; i < N; i++) {
-          pdf_coeffs_[i] = std::max(
-              angleBetweenNormals(normals_[i], rotmat.col(2).normalized()) /
-                  2.0,
-              pdf_coeffs_[i]);
+          // pdf_coeffs_[i] = std::max(
+          //     angleBetweenNormals(normals_[i], rotmat.col(2).normalized()),
+          //     pdf_coeffs_[i]);
+          // update just the top 1 face
+          if (angleBetweenNormals(normals_[i], rotmat.col(2).normalized()) >
+              max_value) {
+            max_value = angleBetweenNormals(normals_[i],
+                                            rotmat.col(2).normalized());
+            max_index = i;
+          }        
         }
+        pdf_coeffs_[max_index] = max_value;
         // publish the pdf coefficients
         std_msgs::msg::Float64MultiArray msg;
         msg.data = pdf_coeffs_;
-        for (size_t i = 0; i < N; i++) {
-          std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i]
-                    << std::endl;
-        }
-        std::cout << "====================" << std::endl;
+        // for (size_t i = 0; i < N; i++) {
+        //   std::cout << "pdf_coeffs_[" << i << "]: " << pdf_coeffs_[i]
+        //             << std::endl;
+        // }
         pdf_coeffs_pub_->publish(msg);
         publishTriangleList();
 
@@ -322,9 +322,7 @@ class VoronoiCalculator : public rclcpp::Node {
             vertices, container_, container_pdf_, j, pdf_coeffs_);
         // publish the result
         // project onto sphere surface
-        std::cout << " x: " << res(0) << " y: " << res(1) << " z: " << res(2)
-                  << std::endl;
-        res = projectOnSphere(res, 0.7);
+        res = projectOnSphere(res, 0.3);
 
         pose_.header.stamp = this->now();
         pose_.header.frame_id = voronoi_frame_;
@@ -332,34 +330,30 @@ class VoronoiCalculator : public rclcpp::Node {
         pose_.pose.position.y = res(1);  // r1_y;
         pose_.pose.position.z = res(2);  // r1_z;
 
-        auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
-                                                   tf2::TimePointZero);
-        // apply orientation so that the robot is always facing the center
-        // (0,0,0) create quaternion from axis angle with no rotation
-
-        // std::cout << " x: " << r1_x << "\n y: " << r1_y << "\n z: " << r1_z
-        //           << std::endl;
-
-        // Eigen::AngleAxisd angle_axis(M_PI, Eigen::Vector3d(0, 0,
-        // 1).normalized()); Eigen::Quaterniond q(angle_axis);
-        auto q = computeQuaternion(
-            Eigen::Vector3d(pose_.pose.position.x, pose_.pose.position.y,
-                            pose_.pose.position.z),
-            Eigen::Vector3d(0, 0, 0));
+        auto q = computeQuaternion(Eigen::Vector3d(r1_x,r1_y,r1_z).normalized(), Eigen::Vector3d(0,0,0) );
+        if (prefix_1_.find('2') != std::string::npos){
+        //   // rotate q by 180 degrees on z axis
+          Eigen::AngleAxisd angle_axis(M_PI, Eigen::Vector3d::UnitZ());
+          q = q * Eigen::Quaterniond(angle_axis);
+        // print in red
+        // std::cout << "\033[1;31mbold "<< Eigen::AngleAxisd(q).angle()<< "\033[0m" << std::endl;
+        }
         pose_.pose.orientation.x = q.x();
         pose_.pose.orientation.y = q.y();
         pose_.pose.orientation.z = q.z();
         pose_.pose.orientation.w = q.w();
 
-        // std::cout << " AA: " << angle_axis.angle() << " "<<
-        // angle_axis.axis().transpose() << std::endl;
+        auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
+                                                   tf2::TimePointZero);
+
+
 
         tf2::doTransform(pose_, pose_, trans);
         // TODO check that the pose is outside of the sphere
         auto new_pose =
             Eigen::Vector3d(pose_.pose.position.x, pose_.pose.position.y,
                             pose_.pose.position.z);
-        new_pose = projectOnSphere(new_pose, 0.6);
+        // new_pose = projectOnSphere(new_pose, 0.6);
         pose_.pose.position.x = new_pose(0);
         pose_.pose.position.y = new_pose(1);
         pose_.pose.position.z = new_pose(2);
@@ -443,13 +437,13 @@ class VoronoiCalculator : public rclcpp::Node {
     for (int i = 0; i < N; i++) {
       auto vertices = faces_vertices_[i];
       for (size_t j = 0; j < vertices.size(); j++) {
-        p.x = vertices[j](0) / 6;
-        p.y = vertices[j](1) / 6;
-        p.z = vertices[j](2) / 6;
+        p.x = vertices[j](0) / 8;
+        p.y = vertices[j](1) / 8;
+        p.z = vertices[j](2) / 8;
         mesh_msg.points.push_back(p);
       }
-      color.r = 0.0;
-      color.g = 0.0;
+      color.r = coloredArray[i];
+      color.g = coloredArray[i];
       color.b = coloredArray[i];
       color.a = 1.0;
       mesh_msg.colors.push_back(color);
@@ -490,9 +484,9 @@ class VoronoiCalculator : public rclcpp::Node {
     for (auto text : texts) {
       marker_array_.markers.push_back(text);
     }
-    for (auto arrow : arrows) {
-      marker_array_.markers.push_back(arrow);
-    }
+    // for (auto arrow : arrows) {
+    //   marker_array_.markers.push_back(arrow);
+    // }
     marker_array_.markers.push_back(arrow_msg);
     markers_publisher_->publish(marker_array_);
   }

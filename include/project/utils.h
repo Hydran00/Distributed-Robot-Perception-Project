@@ -94,10 +94,8 @@ Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
             //   continue;
             // }
             pdf = (1 - multipliers[tmp_cell_idx]) * test_pdf(x, y, z);
-            // pdf = multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0,
-            // 0.0),
-            //                                 10 *
-            //                                 Eigen::Matrix3d::Identity());
+            // multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0),
+            //                           0.75 * Eigen::Matrix3d::Identity());
             mass += pdf;
             com += pdf * point;
           }
@@ -274,18 +272,18 @@ double angleBetweenNormals(const Eigen::Vector3d &normal1,
   auto normal2_ = normal2.normalized();
 
   // Compute the dot product of the two normals
-  // double dotProduct = normal1_.dot(normal2_);
+  double dotProduct = normal1_.dot(normal2_);
 
-  // // Ensure dot product is within valid range [-1, 1]
-  // dotProduct = std::clamp(dotProduct, -1.0, 1.0);
+  // Ensure dot product is within valid range [-1, 1]
+  dotProduct = std::clamp(dotProduct, -1.0, 1.0);
 
-  // // Compute the angle in radians using arccosine
-  // return std::acos(dotProduct);
+  // Compute the angle in radians using arccosine
+  return std::acos(dotProduct) / M_PI;
 
   // return euclidean distance
-  return sqrt(pow(normal1_(0) - normal2_(0), 2) +
-              pow(normal1_(1) - normal2_(1), 2) +
-              pow(normal1_(2) - normal2_(2), 2));
+  // return 0.5 * sqrt(pow(normal1_(0) - normal2_(0), 2) +
+  //             pow(normal1_(1) - normal2_(1), 2) +
+  //             pow(normal1_(2) - normal2_(2), 2));
 }
 
 Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
@@ -304,6 +302,7 @@ Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
 
   // Compute rotation angle
   double angle = -std::acos(direction.dot(Eigen::Vector3d::UnitZ()));
+  std::cout <<"Angle is: " << angle << std::endl;
 
   // Create quaternion
   Eigen::Quaterniond q(Eigen::AngleAxisd(angle, axis.normalized()));
