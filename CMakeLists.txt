@@ -44,9 +44,15 @@ ament_target_dependencies(pointcloud_accumulator pcl_ros pcl_conversions rclcpp 
 target_link_libraries(pointcloud_accumulator ${PCL_LIBRARIES}) 
 
 
+################ Marker publisher ###########################################
+# add_executable(marker_publisher src/marker_publisher.cpp)
+# target_include_directories(integrator_test PUBLIC include/)
+# ament_target_dependencies(marker_publisher rclcpp geometry_msgs visualization_msgs)
+
 ################ Voronoi calculator ##############################
 
-add_executable(voronoi_calculator src/voronoi_calculator.cpp)
+add_executable(voronoi_calculator src/voronoi_calculator.cpp
+src/marker_publisher.cpp)
 
 find_file(libvoro_include NAMES "voro++/")
 # message(STATUS ${libvoro_include})
@@ -67,13 +73,8 @@ ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros tf2 tf
 # add_executable(integrator src/integration.cpp)
 # ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros tf2 tf2_geometry_msgs)
 
-################ Test Integrator ###########################################
-add_executable(integrator_test src/integrate_test.cpp)
-# target_include_directories(integrator_test PUBLIC include/)
-target_link_libraries(integrator_test Eigen3::Eigen libvoro++)
 
-
-INSTALL (TARGETS pointcloud_accumulator voronoi_calculator integrator_test
+INSTALL (TARGETS pointcloud_accumulator voronoi_calculator
   DESTINATION lib/${PROJECT_NAME}
 )
 # python executable
