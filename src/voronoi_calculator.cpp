@@ -128,7 +128,7 @@ class VoronoiCalculator : public rclcpp::Node {
     getIcosahedronFaceVertices(con_size_xmin, con_size_xmax, con_size_ymin,
                                con_size_ymax, con_size_zmin, con_size_zmax,
                                center_x_, center_y_, center_z_, faces_vertices_,
-                               face_centers_, face_normals_, container_pdf_,
+                               faces_centers_, faces_normals_, container_pdf_,
                                planes_pdf_);
     // initialize pdf coefficients
     for (size_t i = 0; i < faces_vertices_.size(); i++) {
@@ -219,14 +219,14 @@ class VoronoiCalculator : public rclcpp::Node {
         double max_value = 0.0;
         double max_index = 0;
         // compute the pdf coefficient
-        for (size_t i = 0; i < face_normals_.size(); i++) {
+        for (size_t i = 0; i < faces_normals_.size(); i++) {
           // pdf_coeffs_[i] = std::max(
-          //     angleBetweenNormals(face_normals_[i],
+          //     angleBetweenNormals(faces_normals_[i],
           //     rotmat.col(2).normalized()), pdf_coeffs_[i]);
           // update just the top 1 face
-          if (angleBetweenNormals(face_normals_[i],
+          if (angleBetweenNormals(faces_normals_[i],
                                   rotmat.col(2).normalized()) > max_value) {
-            max_value = angleBetweenNormals(face_normals_[i],
+            max_value = angleBetweenNormals(faces_normals_[i],
                                             rotmat.col(2).normalized());
             max_index = i;
           }
@@ -283,6 +283,11 @@ class VoronoiCalculator : public rclcpp::Node {
         if (vertices.size() > 0) {
           vertices.clear();
         }
+
+        publishMarker(this->now(), marker_array_, prefix_1_, voronoi_frame_,
+                      faces_centers_, faces_normals_,
+                      rotmat.col(2).normalized(), faces_vertices_, pdf_coeffs_,
+                      markers_publisher_);
       }
     } catch (tf2::TransformException &ex) {
       RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
@@ -306,7 +311,6 @@ class VoronoiCalculator : public rclcpp::Node {
     voronoi_vertices_pub_->publish(voronoi_vertices_);
   }
 
-
   // subscribers and publishers
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr
@@ -328,7 +332,6 @@ class VoronoiCalculator : public rclcpp::Node {
   geometry_msgs::msg::PoseStamped pose_;
   std::vector<Eigen::Vector3d> vertices;
   visualization_msgs::msg::MarkerArray marker_array_;
-  Eigen::Vector3d current_axis_;
   std::string input_frame_, input_frame_other_robot_;
   std::string prefix_1_, prefix_2_;
   std::string voronoi_frame_;
@@ -345,8 +348,8 @@ class VoronoiCalculator : public rclcpp::Node {
   std::shared_ptr<voro::container> container_pdf_;
   std::vector<std::shared_ptr<voro::wall_plane>> planes_, planes_pdf_;
   std::shared_ptr<voro::wall_sphere> sphere;
-  std::vector<Eigen::Vector3d> face_centers_;
-  std::vector<Eigen::Vector3d> face_normals_;
+  std::vector<Eigen::Vector3d> faces_centers_;
+  std::vector<Eigen::Vector3d> faces_normals_;
   std::map<int, std::vector<Eigen::Vector3d>> faces_vertices_;
   std::vector<double> pdf_coeffs_;
   // log

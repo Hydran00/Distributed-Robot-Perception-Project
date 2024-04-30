@@ -11,8 +11,10 @@
 #include <map>
 #include <memory>
 #include <numeric>
+#include <rclcpp/rclcpp.hpp>
 #include <tuple>
 #include <vector>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include "voro++.hh"
 
@@ -229,27 +231,143 @@ Eigen::Vector3d projectOnSphere(Eigen::Vector3d pose, double radius) {
   return radius * pose_norm;
 }
 
-// Function to generate a blues colormap with normalized color values
-std::vector<double> generateBluesColormap(
+// Function to generate a colormap with normalized color values
+std::vector<double> generateColormap(
     int numColors, const std::vector<double> &randomArray) {
-  // Define the range of blue values
-  double startBlue = 0.12;
-  double endBlue = 1.0;
+  // Define the range of values
+  double start = 0.12;
+  double end = 1.0;
 
   // Calculate the increment between each color
-  double increment = (endBlue - startBlue) / (numColors - 1);
+  double increment = (end - start) / (numColors - 1);
 
   // Generate the colormap
   std::vector<double> coloredArray;
   for (double value : randomArray) {
     // Map the random value to the colormap index
     int index = value * numColors;
-    // Calculate the current blue value
-    double blueValue = startBlue + (index * increment);
-    // Store the blue value in the colored array
-    coloredArray.push_back(blueValue);
+    // Calculate the current  value
+    double Value = start + (index * increment);
+    // Store the  value in the colored array
+    coloredArray.push_back(Value);
   }
   return coloredArray;
 }
+void publishMarker(
+    const rclcpp::Time &stamp,
+    visualization_msgs::msg::MarkerArray &marker_array,
+    const std::string &prefix_1, const std::string &frame_id,
+    const std::vector<Eigen::Vector3d> &face_centers,
+    const std::vector<Eigen::Vector3d> &face_normals,
+    const Eigen::Vector3d &current_rot_vec,
+    std::map<int, std::vector<Eigen::Vector3d>> &faces_vertices,
+    const std::vector<double> &pdf_coeffs,
+    const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+        markers_publisher) {
+  marker_array.markers.clear();
+  visualization_msgs::msg::Marker mesh_msg;
+  mesh_msg.header.frame_id = frame_id;
+  mesh_msg.header.stamp = stamp;
+  mesh_msg.ns = prefix_1;
+  mesh_msg.id = 0;
+  mesh_msg.type = visualization_msgs::msg::Marker::TRIANGLE_LIST;
+  mesh_msg.action = visualization_msgs::msg::Marker::MODIFY;
+  mesh_msg.scale.x = 1.0;
+  mesh_msg.scale.y = 1.0;
+  mesh_msg.scale.z = 1.0;
+  mesh_msg.color.r = 1.0;
+  mesh_msg.color.a = 1.0;
 
+  visualization_msgs::msg::Marker text_msg;
+  text_msg.header.frame_id = frame_id;
+  text_msg.header.stamp = stamp;
+  text_msg.ns = prefix_1;
+  text_msg.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+  text_msg.action = visualization_msgs::msg::Marker::MODIFY;
+  text_msg.scale.z = 0.05;
+  text_msg.color.r = 1.0;
+  text_msg.color.g = 1.0;
+  text_msg.color.b = 1.0;
+  text_msg.color.a = 0.85;
+
+  visualization_msgs::msg::Marker arrow_msg;
+  arrow_msg.header.frame_id = frame_id;
+  arrow_msg.header.stamp = stamp;
+  arrow_msg.ns = prefix_1;
+  arrow_msg.type = visualization_msgs::msg::Marker::ARROW;
+  arrow_msg.action = visualization_msgs::msg::Marker::MODIFY;
+  arrow_msg.scale.x = 0.02;
+  // arrow_msg.scale.y = 0.1;
+  arrow_msg.scale.z = 0.03;
+  arrow_msg.color.r = 1.0;
+  arrow_msg.color.g = 0.0;
+  arrow_msg.color.b = 0.0;
+  arrow_msg.color.a = 1.0;
+
+  std::vector<visualization_msgs::msg::Marker> texts;
+  std::vector<visualization_msgs::msg::Marker> arrows;
+  // generate colormap
+  std::vector<double> coloredArray =
+      generateColormap((int)pdf_coeffs.size(), pdf_coeffs);
+
+  geometry_msgs::msg::Point p;
+  geometry_msgs::msg::Point normal;
+  std_msgs::msg::ColorRGBA color;
+
+  for (size_t i = 0; i < faces_vertices.size(); i++) {
+    // auto vertices = faces_vertices[i];
+    for (size_t j = 0; j < faces_vertices[i].size(); j++) {
+      p.x = faces_vertices[i][j](0) / 8;
+      p.y = faces_vertices[i][j](1) / 8;
+      p.z = faces_vertices[i][j](2) / 8;
+      mesh_msg.points.push_back(p);
+    }
+    color.r = coloredArray[i];
+    color.g = coloredArray[i];
+    color.b = coloredArray[i];
+    color.a = 1.0;
+    mesh_msg.colors.push_back(color);
+    text_msg.pose.position.x = face_centers[i](0) / 2;
+    text_msg.pose.position.y = face_centers[i](1) / 2;
+    text_msg.pose.position.z = face_centers[i](2) / 2;
+    text_msg.text = std::to_string(i);
+    text_msg.id = i + 1;
+    texts.push_back(text_msg);
+    arrow_msg.points.clear();
+    normal.x = 0.0;
+    normal.y = 0.0;
+    normal.z = 0.0;
+    arrow_msg.points.push_back(normal);
+    normal.x = face_normals[i](0);
+    normal.y = face_normals[i](1);
+    normal.z = face_normals[i](2);
+    arrow_msg.points.push_back(normal);
+    arrow_msg.id = (int)faces_vertices.size() + i + 1;
+    arrows.push_back(arrow_msg);
+  }
+  // // CURRENT ORIENTATION
+  arrow_msg.points.clear();
+  normal.x = 0.0;
+  normal.y = 0.0;
+  normal.z = 0.0;
+  arrow_msg.points.push_back(normal);
+  normal.x = current_rot_vec(0);
+  normal.y = current_rot_vec(1);
+  normal.z = current_rot_vec(2);
+  arrow_msg.points.push_back(normal);
+  arrow_msg.id = 2 * (int)faces_vertices.size() + 1;
+  arrow_msg.color.g = 1.0;
+  arrow_msg.color.r = 0.0;
+
+  // // std::cout << "/////////////////" << std::endl;
+  marker_array.markers.push_back(mesh_msg);
+  for (auto text : texts) {
+    marker_array.markers.push_back(text);
+  }
+  // for (auto arrow : arrows) {
+  //   marker_array.markers.push_back(arrow);
+  // }
+  marker_array.markers.push_back(arrow_msg);
+  markers_publisher->publish(marker_array);
+}
 #endif
