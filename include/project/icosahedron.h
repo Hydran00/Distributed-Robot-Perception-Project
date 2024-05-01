@@ -2,7 +2,6 @@
 #define ICOSAHEDRON_H
 #include "project/utils.h"
 
-
 void getIcosahedronFaceVertices(
     double con_size_xmin, double con_size_xmax, double con_size_ymin,
     double con_size_ymax, double con_size_zmin, double con_size_zmax,

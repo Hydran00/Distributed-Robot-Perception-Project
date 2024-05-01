@@ -20,9 +20,19 @@
 #include "voro++.hh"
 
 namespace utils {
-double test_pdf(double x, double y, double z) {
-  Eigen::VectorXd result(3);
-  result << x * y * z;
+double test_pdf(double x, double y, double z, Eigen::Vector3d robot_base,
+                double radius) {
+  Eigen::Vector3d current_pos(x, y, z);
+  if (z < 0) {
+    return 0;
+  }
+
+  // if ((robot_base - current_pos).norm() > radius) {
+  //   return 0;
+  // } else {
+  //   return 1;
+  //   // return 1 - (robot_base - current_pos).norm() / radius;
+  // }
   return 1;
 }
 
@@ -44,7 +54,8 @@ Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
     std::vector<Eigen::Vector3d> &vertices,
     std::shared_ptr<voro::container> con,
     std::shared_ptr<voro::container> con_pdf, int cell_idx,
-    std::vector<double> multipliers) {
+    std::vector<double> multipliers, Eigen::Vector3d robot_base,
+    double radius) {
   Eigen::Vector3d result(3);
   result << 0, 0, 0;
 
@@ -97,7 +108,8 @@ Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
             // if ((1-multipliers[tmp_cell_idx]) < 0.6) {
             //   continue;
             // }
-            pdf = (1 - multipliers[tmp_cell_idx]) * test_pdf(x, y, z);
+            pdf = (1 - multipliers[tmp_cell_idx]) *
+                  test_pdf(x, y, z, robot_base, radius);
             // multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0),
             //                           0.75 * Eigen::Matrix3d::Identity());
             mass += pdf;
@@ -402,6 +414,20 @@ void publishMarker(
   // }
   marker_array.markers.push_back(arrow_msg);
   markers_publisher->publish(marker_array);
+}
+std::vector<std::pair<double, int>> getTopKWithIndices(const std::vector<double> &nums, int k) {
+  std::vector<std::pair<double, int>> indexedNums(nums.size());
+  for (int i = 0; i < nums.size(); ++i) {
+    indexedNums[i] = {nums[i], i};
+  }
+
+  sort(indexedNums.rbegin(), indexedNums.rend());  // Sort in descending order
+
+  std::vector<std::pair<double, int>> topkWithIndices;
+  for (int i = 0; i < std::min(k, (int)indexedNums.size()); ++i) {
+    topkWithIndices.push_back(indexedNums[i]);
+  }
+  return topkWithIndices;
 }
 }  // namespace utils
 #endif

@@ -192,85 +192,99 @@ class VoronoiCalculator : public rclcpp::Node {
 
       // extract
 
-      if (vertices.size() > 0) {
-        if (debug_) {
-          utils::publishVoronoiVertices(this->now(), vertices, voronoi_frame_,
-                                        voronoi_vertices_pub_);
-        }
-        Eigen::Quaterniond quat(
-            r1_pose_.transform.rotation.w, r1_pose_.transform.rotation.x,
-            r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z);
-        auto rotmat = quat.toRotationMatrix();
-        double max_value = 0.0;
-        double max_index = 0;
-        // compute the pdf coefficient
-        for (size_t i = 0; i < faces_normals_.size(); i++) {
-          // update just the top 1 face
-          const double angle = utils::angleBetweenNormals(faces_normals_[i],
-                                                   rotmat.col(2).normalized());
-          if (angle > max_value) {
-            max_value = angle;
-            max_index = i;
-          }
-        }
-        pdf_coeffs_[max_index] = max_value;
-        // publish the pdf coefficients
-        std_msgs::msg::Float64MultiArray msg;
-        msg.data = pdf_coeffs_;
-
-        pdf_coeffs_pub_->publish(msg);
-        // publishTriangleList();
-
-        auto res = utils::integrateVectorValuedPdfOverPolyhedron(
-            vertices, container_, container_pdf_, j, pdf_coeffs_);
-        // publish the result
-        // project onto sphere surface
-        res = utils::projectOnSphere(res, 0.3);
-
-        pose_.header.stamp = this->now();
-        pose_.header.frame_id = voronoi_frame_;
-        pose_.pose.position.x = res(0);  // r1_x;
-        pose_.pose.position.y = res(1);  // r1_y;
-        pose_.pose.position.z = res(2);  // r1_z;
-
-        auto q =
-            utils::computeQuaternion(Eigen::Vector3d(r1_x, r1_y, r1_z).normalized(),
-                              Eigen::Vector3d(0, 0, 0));
-        // if (prefix_1_.find('2') != std::string::npos) {
-          //   // rotate q by 180 degrees on z axis
-          // Eigen::AngleAxisd angle_axis(M_PI, Eigen::Vector3d::UnitZ());
-          // q = q * Eigen::Quaterniond(angle_axis);
-          // print in red
-          // std::cout << "\033[1;31mbold "<< Eigen::AngleAxisd(q).angle()<<
-          // "\033[0m" << std::endl;
-        // }
-        pose_.pose.orientation.x = q.x();
-        pose_.pose.orientation.y = q.y();
-        pose_.pose.orientation.z = q.z();
-        pose_.pose.orientation.w = q.w();
-
-        auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
-                                                   tf2::TimePointZero);
-
-        tf2::doTransform(pose_, pose_, trans);
-        // TODO check that the pose is outside of the sphere
-        auto new_pose =
-            Eigen::Vector3d(pose_.pose.position.x, pose_.pose.position.y,
-                            pose_.pose.position.z);
-        // new_pose = projectOnSphere(new_pose, 0.6);
-        pose_.pose.position.x = new_pose(0);
-        pose_.pose.position.y = new_pose(1);
-        pose_.pose.position.z = new_pose(2);
-        target_pub_->publish(pose_);
-        if (vertices.size() > 0) {
-          vertices.clear();
-        }
-
-        utils::publishMarker(this->now(), marker_array_, prefix_1_, voronoi_frame_,
-                      faces_centers_, faces_normals_,
-                      rotmat.col(2).normalized(), faces_vertices_, pdf_coeffs_,
-                      markers_publisher_);
+      // if (vertices.size() > 0) {
+      if (debug_) {
+        utils::publishVoronoiVertices(this->now(), vertices, voronoi_frame_,
+                                      voronoi_vertices_pub_);
       }
+      Eigen::Quaterniond quat(
+          r1_pose_.transform.rotation.w, r1_pose_.transform.rotation.x,
+          r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z);
+      auto rotmat = quat.toRotationMatrix();
+      // double max_value = 0.0;
+      // double max_index = 0;
+      std::vector<double> angles;
+
+      // compute the pdf coefficient
+      for (size_t i = 0; i < faces_normals_.size(); i++) {
+        // update just the top 3 face
+        angles.push_back(utils::angleBetweenNormals(
+            faces_normals_[i], rotmat.col(2).normalized()));
+      }
+      auto top3value_ids = utils::getTopKWithIndices(angles, 3);
+
+      for (auto pair : top3value_ids) {
+        pdf_coeffs_[pair.second] = std::max(pair.first, pdf_coeffs_[pair.second]);
+      }
+      if (debug_) {
+        for (int i = 0; i < pdf_coeffs_.size(); i++) {
+          std::cout << "Face " << i << ": " << pdf_coeffs_[i] << std::endl;
+        }
+      }
+      // }
+      // pdf_coeffs_[max_index] = max_value;
+      // publish the pdf coefficients
+      std_msgs::msg::Float64MultiArray msg;
+      msg.data = pdf_coeffs_;
+
+      pdf_coeffs_pub_->publish(msg);
+      // publishTriangleList();
+
+      // compute robot base
+      auto base = tf_buffer_1_->lookupTransform(voronoi_frame_, base_frame_,
+                                                tf2::TimePointZero, 10ms);
+      Eigen::Vector3d base_(base.transform.translation.x,
+                            base.transform.translation.y,
+                            base.transform.translation.z);
+      auto res = utils::integrateVectorValuedPdfOverPolyhedron(
+          vertices, container_, container_pdf_, j, pdf_coeffs_, base_, 0.);
+      // publish the result
+      // project onto sphere surface
+      res = utils::projectOnSphere(res, 0.3);
+
+      pose_.header.stamp = this->now();
+      pose_.header.frame_id = voronoi_frame_;
+      pose_.pose.position.x = res(0);  // r1_x;
+      pose_.pose.position.y = res(1);  // r1_y;
+      pose_.pose.position.z = res(2);  // r1_z;
+
+      auto q = utils::computeQuaternion(
+          Eigen::Vector3d(r1_x, r1_y, r1_z).normalized(),
+          Eigen::Vector3d(0, 0, 0));
+      if (prefix_1_.find('2') != std::string::npos) {
+        // rotate q by 180 degrees on z axis
+        Eigen::AngleAxisd angle_axis(M_PI, Eigen::Vector3d::UnitZ());
+        q = q * Eigen::Quaterniond(angle_axis);
+        // print in red
+        // std::cout << "\033[1;31mbold "<< Eigen::AngleAxisd(q).angle()<<
+        // "\033[0m" << std::endl;
+      }
+      pose_.pose.orientation.x = q.x();
+      pose_.pose.orientation.y = q.y();
+      pose_.pose.orientation.z = q.z();
+      pose_.pose.orientation.w = q.w();
+
+      auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
+                                                 tf2::TimePointZero);
+
+      tf2::doTransform(pose_, pose_, trans);
+      // TODO check that the pose is outside of the sphere
+      auto new_pose = Eigen::Vector3d(
+          pose_.pose.position.x, pose_.pose.position.y, pose_.pose.position.z);
+      // new_pose = projectOnSphere(new_pose, 0.6);
+      pose_.pose.position.x = new_pose(0);
+      pose_.pose.position.y = new_pose(1);
+      pose_.pose.position.z = new_pose(2);
+      target_pub_->publish(pose_);
+      if (vertices.size() > 0) {
+        vertices.clear();
+      }
+
+      utils::publishMarker(this->now(), marker_array_, prefix_1_,
+                           voronoi_frame_, faces_centers_, faces_normals_,
+                           rotmat.col(2).normalized(), faces_vertices_,
+                           pdf_coeffs_, markers_publisher_);
+
     } catch (tf2::TransformException &ex) {
       RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
                    ex.what());
