@@ -15,7 +15,7 @@ void getIcosahedronFaceVertices(
     std::vector<std::shared_ptr<voro::wall_plane>> &planes) {
   double scale = 2.0;
   container_pdf_->clear();
-  init_icosahedron_planes(planes, scale);
+  utils::initIcosahedronPlanes(planes, scale);
   for (auto plane : planes) {
     container_pdf_->add_wall(*plane);
   }
@@ -71,7 +71,7 @@ void getIcosahedronFaceVertices(
   container_pdf_->clear();
   Eigen::Vector3d center(center_x, center_y, center_z);
   for (auto const &face : faces_vertices_) {
-    Eigen::Vector3d face_center = 0.5 * computeCenter(face.second, center);
+    Eigen::Vector3d face_center = 0.5 * utils::computeCenter(face.second, center);
     if (container_pdf_->point_inside(face_center.x(), face_center.y(), face_center.z())) {
       container_pdf_->put(z, face_center.x(), face_center.y(), face_center.z());
       face_centers_.push_back(face_center);

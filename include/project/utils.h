@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <fstream>
+#include <geometry_msgs/msg/pose_array.hpp>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -18,6 +19,7 @@
 
 #include "voro++.hh"
 
+namespace utils {
 double test_pdf(double x, double y, double z) {
   Eigen::VectorXd result(3);
   result << x * y * z;
@@ -38,7 +40,7 @@ double multivariate_gaussian_pdf(Eigen::Vector3d point, Eigen::Vector3d mean,
   return normalization * exp(exponent);
 }
 
-Eigen::Vector3d integrate_vector_valued_pdf_over_polyhedron(
+Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
     std::vector<Eigen::Vector3d> &vertices,
     std::shared_ptr<voro::container> con,
     std::shared_ptr<voro::container> con_pdf, int cell_idx,
@@ -119,7 +121,7 @@ Eigen::Vector3d computeCenter(const std::vector<Eigen::Vector3d> &vertices,
 };
 
 // passing array
-void init_icosahedron_planes(
+void initIcosahedronPlanes(
     std::vector<std::shared_ptr<voro::wall_plane>> &walls, int scale = 1) {
   const double Phi = 0.5 * (1 + sqrt(5.0));
   const double phi = 0.5 * (1 - sqrt(5.0));
@@ -207,24 +209,34 @@ double angleBetweenNormals(const Eigen::Vector3d &normal1,
 
 Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
                                      const Eigen::Vector3d &center) {
-  Eigen::Vector3d direction = (center - point).normalized();
+  const Eigen::Vector3d direction = (center - point).normalized();
+  // Eigen::Vector3d axis = Eigen::Vector3d::UnitZ().cross(direction);
+  // double angle = acos(Eigen::Vector3d::UnitZ().dot(direction));
+  // Eigen::Quaterniond q;
+  // q = Eigen::AngleAxisd(angle, axis.normalized());
+  // return q;
+  Eigen::Quaterniond q;
+  Eigen::Vector3d up = Eigen::Vector3d::UnitZ();
+  double dot = up.dot(direction);
 
-  // Compute rotation axis by projecting direction onto XY plane
-  Eigen::Vector3d projDirection =
-      direction -
-      direction.dot(Eigen::Vector3d::UnitZ()) * Eigen::Vector3d::UnitZ();
-  double projDirectionNorm = projDirection.norm();
-  Eigen::Vector3d axis =
-      projDirectionNorm < 1e-5
-          ? Eigen::Vector3d::UnitZ().cross(Eigen::Vector3d::UnitX())
-          : projDirection.cross(Eigen::Vector3d::UnitZ());
+  // Handle the case when the direction is parallel or anti-parallel to the up
+  // vector
+  if (std::abs(dot - (-1.0)) < 1.0e-10) {
+    // 180 degrees rotation around any vector perpendicular to the target
+    // direction
+    Eigen::Vector3d axis = direction.unitOrthogonal();
+    q = Eigen::Quaterniond::FromTwoVectors(up, axis);
+  } else if (std::abs(dot - 1.0) < 1.0e-10) {
+    q = Eigen::Quaterniond::Identity();
+  } else {
+    // General case
+    double angle = acos(dot);
+    Eigen::Vector3d axis = up.cross(direction).normalized();
+    q = Eigen::Quaterniond(Eigen::AngleAxisd(angle, axis));
+  }
 
-  // Compute rotation angle
-  double angle = -std::acos(direction.dot(Eigen::Vector3d::UnitZ()));
-
-  // Create quaternion
-  Eigen::Quaterniond q(Eigen::AngleAxisd(angle, axis.normalized()));
-  return q.normalized();
+  return q;
+  // }
 }
 Eigen::Vector3d projectOnSphere(Eigen::Vector3d pose, double radius) {
   auto pose_norm = pose.normalized();
@@ -232,8 +244,8 @@ Eigen::Vector3d projectOnSphere(Eigen::Vector3d pose, double radius) {
 }
 
 // Function to generate a colormap with normalized color values
-std::vector<double> generateColormap(
-    int numColors, const std::vector<double> &randomArray) {
+std::vector<double> generateColormap(int numColors,
+                                     const std::vector<double> &randomArray) {
   // Define the range of values
   double start = 0.12;
   double end = 1.0;
@@ -252,6 +264,27 @@ std::vector<double> generateColormap(
     coloredArray.push_back(Value);
   }
   return coloredArray;
+}
+void publishVoronoiVertices(
+    const rclcpp::Time &stamp, const std::vector<Eigen::Vector3d> &vertices,
+    const std::string &voronoi_frame_,
+    const rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr
+        voronoi_vertices_pub) {
+  geometry_msgs::msg::PoseArray voronoi_vertices;
+
+  // publish voronoi vertices
+  voronoi_vertices.header.stamp = stamp;
+  voronoi_vertices.header.frame_id = voronoi_frame_;
+  voronoi_vertices.poses.clear();
+  for (const auto &vertex : vertices) {
+    geometry_msgs::msg::Pose pose;
+    pose.position.x = vertex(0);
+    pose.position.y = vertex(1);
+    pose.position.z = vertex(2);
+    voronoi_vertices.poses.push_back(pose);
+  }
+
+  voronoi_vertices_pub->publish(voronoi_vertices);
 }
 void publishMarker(
     const rclcpp::Time &stamp,
@@ -370,4 +403,5 @@ void publishMarker(
   marker_array.markers.push_back(arrow_msg);
   markers_publisher->publish(marker_array);
 }
+}  // namespace utils
 #endif
