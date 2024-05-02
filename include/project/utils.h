@@ -22,10 +22,10 @@
 namespace utils {
 double test_pdf(double x, double y, double z, Eigen::Vector3d robot_base,
                 double radius) {
-  Eigen::Vector3d current_pos(x, y, z);
-  if (z < 0) {
-    return 0;
-  }
+  // Eigen::Vector3d current_pos(x, y, z);
+  // if (z < 0) {
+    // return 0;
+  // }
 
   // if ((robot_base - current_pos).norm() > radius) {
   //   return 0;

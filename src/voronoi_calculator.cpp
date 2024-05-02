@@ -214,7 +214,8 @@ class VoronoiCalculator : public rclcpp::Node {
       auto top3value_ids = utils::getTopKWithIndices(angles, 3);
 
       for (auto pair : top3value_ids) {
-        pdf_coeffs_[pair.second] = std::max(pair.first, pdf_coeffs_[pair.second]);
+        pdf_coeffs_[pair.second] =
+            std::max(pair.first, pdf_coeffs_[pair.second]);
       }
       if (debug_) {
         for (int i = 0; i < pdf_coeffs_.size(); i++) {
@@ -266,8 +267,11 @@ class VoronoiCalculator : public rclcpp::Node {
 
       auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
                                                  tf2::TimePointZero);
-
+      // auto trans = tf_buffer_1_->lookupTransform(input_frame_, voronoi_frame_,
+      //                                            tf2::TimePointZero);
+      
       tf2::doTransform(pose_, pose_, trans);
+
       // TODO check that the pose is outside of the sphere
       auto new_pose = Eigen::Vector3d(
           pose_.pose.position.x, pose_.pose.position.y, pose_.pose.position.z);
@@ -275,6 +279,21 @@ class VoronoiCalculator : public rclcpp::Node {
       pose_.pose.position.x = new_pose(0);
       pose_.pose.position.y = new_pose(1);
       pose_.pose.position.z = new_pose(2);
+
+      // slerp between current and new quaternion
+      // Eigen::Quaterniond q1(pose_.pose.orientation.w, pose_.pose.orientation.x,
+      //                       pose_.pose.orientation.y, pose_.pose.orientation.z);
+      // Eigen::Quaterniond q2(r1_pose_.transform.rotation.w,
+      //                       r1_pose_.transform.rotation.x,
+      //                       r1_pose_.transform.rotation.y,
+      //                       r1_pose_.transform.rotation.z);
+      // double t = 0.01;
+      // Eigen::Quaterniond q3 = q1.slerp(t, q2);
+      // pose_.pose.orientation.x = q3.x();
+      // pose_.pose.orientation.y = q3.y();
+      // pose_.pose.orientation.z = q3.z();
+      // pose_.pose.orientation.w = q3.w();
+
       target_pub_->publish(pose_);
       if (vertices.size() > 0) {
         vertices.clear();

@@ -3,30 +3,13 @@ from launch import LaunchDescription
 import xacro,os
 from launch_ros.actions import Node
 from launch.actions import TimerAction
-from launch.actions import IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+# from launch.launch_description_sources import PythonLaunchDescriptionSource
 
-import os,time
+import os
 
 PREFIX_LIST = ['1_', '2_']
 
 def generate_launch_description():
-    # include the launch file for point clouds
-    description_package = get_package_share_directory('point_robot_description')
-    xacro_path = os.path.join(description_package,"urdf","point_robot.xacro")
-    robot_controllers = os.path.join(description_package,"config", "multi_robot_controllers.yaml")
-
-    ur_type="ur3e"
-    robot_description_content1 = xacro.process_file(xacro_path, mappings={"prefix":PREFIX_LIST[0]})
-    robot_description_content2 = xacro.process_file(xacro_path, mappings={"prefix":PREFIX_LIST[1]})
-                                                                        
-
-    robot_description_content1 = robot_description_content1.toprettyxml(indent=' ')
-    robot_description_content2 = robot_description_content2.toprettyxml(indent=' ')
-
-    robot_description1 = {"robot_description": robot_description_content1}
-    robot_description2 = {"robot_description": robot_description_content2}
-
     # suppress the output
     point_robot_1_tf_pub = Node(
         name='point_robot_1_tf_pub',
@@ -34,7 +17,7 @@ def generate_launch_description():
         executable='tf_pub',
         output='screen',
         parameters=[{"use_sim_time": True},
-                    {'prefix': '1_'}]                    
+                    {'prefix': PREFIX_LIST[0]}]                  
     )    
     point_robot_2_tf_pub = Node(
         name='point_robot_2_tf_pub',
@@ -42,23 +25,21 @@ def generate_launch_description():
         executable='tf_pub',
         output='screen',
         parameters=[{"use_sim_time": True},
-                    {'prefix': '2_'}]                    
+                    {'prefix': PREFIX_LIST[1]}]          
     )
-    robot_state_publisher1 = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        output="both",
-        namespace="robot" + PREFIX_LIST[0],
-        parameters=[robot_description1,{"use_sim_time": True, "publish_frequency": 100.0}],
+
+    static_trans_broadcaster1 = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0', '0.0141', '-0.02925', '3.14159', '0', '1.5708', '1_base_link', '1_camera'],
+        output='screen',
     )
-    robot_state_publisher2 = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        output="both",
-        namespace="robot" + PREFIX_LIST[1],
-        parameters=[robot_description2,{"use_sim_time": True, "publish_frequency": 100.0}],
+    static_trans_broadcaster2 = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0', '0.0141', '-0.02925', '3.14159', '0', '1.5708', '2_base_link', '2_camera'],
+        output='screen',
     )
-    
     
     pointcloud_accumulator = Node(
         package='project',
@@ -74,7 +55,7 @@ def generate_launch_description():
                     ]
     )
     
-    rviz_config = os.path.join(get_package_share_directory('project'), 'rviz_config','rviz.rviz')
+    rviz_config = os.path.join(get_package_share_directory('project'), 'rviz_config','rviz_point.rviz')
     rviz = Node(
         package="rviz2",
         executable="rviz2",
@@ -86,12 +67,12 @@ def generate_launch_description():
 
     node_list = TimerAction(period=0.0,
             actions=[
-                robot_state_publisher1,
-                robot_state_publisher2,
+                static_trans_broadcaster1,
+                static_trans_broadcaster2,
                 point_robot_1_tf_pub,
                 point_robot_2_tf_pub,
                 # pointcloud_accumulator,
-                # rviz,
+                rviz,
                 
             ])
 
