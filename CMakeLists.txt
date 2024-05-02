@@ -32,6 +32,11 @@ find_package(Eigen3 REQUIRED)
 foreach(Dependency IN ITEMS ${THIS_PACKAGE_INCLUDE_DEPENDS})
   find_package(${Dependency} REQUIRED)
 endforeach()
+################ tf publisher ###################################
+add_executable(tf_publisher src/tf_pub.cpp)
+ament_target_dependencies(tf_publisher rclcpp tf2_ros geometry_msgs)
+
+################ Point cloud accumulator ########################
 
 add_executable(pointcloud_accumulator src/pointcloud_accumulator.cpp)
 
@@ -67,7 +72,7 @@ ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros tf2 tf
 # ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros tf2 tf2_geometry_msgs)
 
 
-INSTALL (TARGETS pointcloud_accumulator voronoi_calculator
+INSTALL (TARGETS pointcloud_accumulator voronoi_calculator tf_publisher
   DESTINATION lib/${PROJECT_NAME}
 )
 # python executable

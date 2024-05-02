@@ -11,18 +11,18 @@ PREFIX_LIST = ['1_', '2_']
 
 def generate_launch_description():
     # suppress the output
-    point_robot_1_tf_pub = Node(
-        name='point_robot_1_tf_pub',
-        package='point_robot_description',
-        executable='tf_pub',
+    tf_pub1 = Node(
+        name='tf_pub' + PREFIX_LIST[0],
+        package='project',
+        executable='tf_publisher',
         output='screen',
         parameters=[{"use_sim_time": True},
                     {'prefix': PREFIX_LIST[0]}]                  
     )    
-    point_robot_2_tf_pub = Node(
-        name='point_robot_2_tf_pub',
-        package='point_robot_description',
-        executable='tf_pub',
+    tf_pub2 = Node(
+        name='tf_pub' + PREFIX_LIST[1],
+        package='project',
+        executable='tf_publisher',
         output='screen',
         parameters=[{"use_sim_time": True},
                     {'prefix': PREFIX_LIST[1]}]          
@@ -69,8 +69,8 @@ def generate_launch_description():
             actions=[
                 static_trans_broadcaster1,
                 static_trans_broadcaster2,
-                point_robot_1_tf_pub,
-                point_robot_2_tf_pub,
+                tf_pub1,
+                tf_pub2,
                 # pointcloud_accumulator,
                 rviz,
                 
