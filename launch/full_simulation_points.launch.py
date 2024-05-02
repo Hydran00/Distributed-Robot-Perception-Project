@@ -31,13 +31,13 @@ def generate_launch_description():
     static_trans_broadcaster1 = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        arguments=['0', '0.0141', '-0.02925', '3.14159', '0', '1.5708', '1_base_link', '1_camera'],
+        arguments=['0', '0', '0', '0', '0', '0', '1_base_link', '1_camera'],
         output='screen',
     )
     static_trans_broadcaster2 = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        arguments=['0', '0.0141', '-0.02925', '3.14159', '0', '1.5708', '2_base_link', '2_camera'],
+        arguments=['0', '0', '0', '0', '0', '0', '2_base_link', '2_camera'],
         output='screen',
     )
     

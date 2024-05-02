@@ -51,6 +51,7 @@ def generate_launch_description():
         {"prefix_2": "2_"},
         {"voronoi_frame": "world"},
         {"input_frame": "camera"},
+        {"output_frame": "world"}, # world for point robot or 1_base_link 
         {"base_frame": "base_link"},
         {"input_frame_other_robot": "camera"},
         {"target_topic": "target_frame"},
@@ -65,8 +66,9 @@ def generate_launch_description():
         {"debug": False},
         {"prefix_1": "2_"},
         {"prefix_2": "1_"},
-        {"voronoi_frame": "world"},
+        {"voronoi_frame": "world"}, # world for point robot or 2_base_link
         {"input_frame": "camera"},
+        {"output_frame": "world"},
         {"base_frame": "base_link"},
         {"input_frame_other_robot": "camera"},
         {"target_topic": "target_frame"},
@@ -87,7 +89,7 @@ def generate_launch_description():
         # pointcloud_accumulator,
         # rviz
         voronoi_calculator_1,
-        # voronoi_calculator_2,
+        voronoi_calculator_2,
         
         ]
     return LaunchDescription(node_list)    

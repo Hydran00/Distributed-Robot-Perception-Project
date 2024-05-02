@@ -55,6 +55,9 @@ class VoronoiCalculator : public rclcpp::Node {
     this->declare_parameter("base_frame", "base_link");
     base_frame_ = prefix_1_ + this->get_parameter("base_frame").as_string();
 
+    this->declare_parameter("output_frame", "base_link");
+    output_frame_ = this->get_parameter("output_frame").as_string();
+
     this->declare_parameter("center_x", 0.0);
     center_x_ = this->get_parameter("center_x").as_double();
 
@@ -265,17 +268,14 @@ class VoronoiCalculator : public rclcpp::Node {
       pose_.pose.orientation.z = q.z();
       pose_.pose.orientation.w = q.w();
 
-      auto trans = tf_buffer_1_->lookupTransform(base_frame_, voronoi_frame_,
+
+      auto trans = tf_buffer_1_->lookupTransform(output_frame_, voronoi_frame_,
                                                  tf2::TimePointZero);
-      // auto trans = tf_buffer_1_->lookupTransform(input_frame_, voronoi_frame_,
-      //                                            tf2::TimePointZero);
-      
       tf2::doTransform(pose_, pose_, trans);
 
       // TODO check that the pose is outside of the sphere
       auto new_pose = Eigen::Vector3d(
           pose_.pose.position.x, pose_.pose.position.y, pose_.pose.position.z);
-      // new_pose = projectOnSphere(new_pose, 0.6);
       pose_.pose.position.x = new_pose(0);
       pose_.pose.position.y = new_pose(1);
       pose_.pose.position.z = new_pose(2);
@@ -335,6 +335,7 @@ class VoronoiCalculator : public rclcpp::Node {
   std::string prefix_1_, prefix_2_;
   std::string voronoi_frame_;
   std::string base_frame_;
+  std::string output_frame_;
   std::string target_topic_;
   double center_x_, center_y_, center_z_;
   bool debug_;
