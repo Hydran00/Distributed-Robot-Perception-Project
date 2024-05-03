@@ -16,6 +16,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <string>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "tf2/convert.h"
@@ -230,7 +231,7 @@ class VoronoiCalculator : public rclcpp::Node {
             std::max(pair.first, pdf_coeffs_[pair.second]);
       }
       // if (debug_) {
-      // for (int i = 0; i < pdf_coeffs_.size(); i++) {
+      // for (int i = 0; i < pdf_coeffs_.size(); i++) {q
       //   std::cout << "Face " << i << ": " << pdf_coeffs_[i] << std::endl;
       // }
       // }
@@ -253,8 +254,9 @@ class VoronoiCalculator : public rclcpp::Node {
       auto res = utils::integrateVectorValuedPdfOverPolyhedron(
           vertices, container_, container_pdf_, j, pdf_coeffs_, base_, 0.);
 
-      // publish the result
-      simulateAnnealing();
+      // if (debug_) {
+      //   std::cout << "Integral Result: " << res.transpose() << std::endl;
+      // }
       // project onto sphere surface
       res = utils::projectOnSphere(res, 0.3);
 
@@ -263,6 +265,9 @@ class VoronoiCalculator : public rclcpp::Node {
       pose_.pose.position.x = res(0);  // r1_x;
       pose_.pose.position.y = res(1);  // r1_y;
       pose_.pose.position.z = res(2);  // r1_z;
+
+      // publish the result
+      simulateAnnealing();
 
       auto q = utils::computeQuaternion(
           Eigen::Vector3d(r1_x, r1_y, r1_z).normalized(),
@@ -303,7 +308,7 @@ class VoronoiCalculator : public rclcpp::Node {
     Eigen::Vector3d r1_current_pose(r1_pose_.transform.translation.x,
                                     r1_pose_.transform.translation.y,
                                     r1_pose_.transform.translation.z);
-    r1_trans_velocity_ = (r1_current_pose - r1_last_pose_) /
+    r1_trans_velocity_ = (r1_current_pose - r1_last_pose_)/
                          (this->now() - last_time_).seconds();
     // add noise
 
@@ -312,19 +317,38 @@ class VoronoiCalculator : public rclcpp::Node {
         if (debug_) {
           RCLCPP_INFO(this->get_logger(), "Starting annealing");
         }
-        // if annealing starts now, generate a random perturbation
-        perturbation_ = Eigen::Vector3d::Random();  // * perturbation_scale_;
+        // if annealing starts now, generate a random perturbation over the
+        // sphere using quaternion slerp
+
+        // include prefix into srand (1_ becomes 1)
+        srand(time(NULL) + (int)(prefix_1_[0] - '0'));
+        perturbation_ = Eigen::Vector3d::Random() * perturbation_scale_;
+        perturbation_[2] = 0.0;
+
         annealing_start_time_ = this->now();
         annealing_ = true;
       }
     }
     if (annealing_) {
-      pose_.pose.position.x += perturbation_(0);
-      pose_.pose.position.y += perturbation_(1);
-      pose_.pose.position.z += perturbation_(2);
+      geometry_msgs::msg::PoseStamped annealing_pose;
+      annealing_pose.pose.position.x = perturbation_(0);
+      annealing_pose.pose.position.y = perturbation_(1);
+      annealing_pose.pose.position.z = perturbation_(2);
+
+      auto trans = tf_buffer_1_->lookupTransform(voronoi_frame_, input_frame_,
+                                                 tf2::TimePointZero, 10ms);
+      tf2::doTransform(annealing_pose, pose_, trans);
+      // project onto sphere surface
+      Eigen::Vector3d res(pose_.pose.position.x,
+                          pose_.pose.position.y,
+                          pose_.pose.position.z);
+      res = utils::projectOnSphere(res, 0.3);
+      pose_.pose.position.x = res(0);
+      pose_.pose.position.y = res(1);
+      pose_.pose.position.z = res(2);
     }
     if ((this->now().nanoseconds() - annealing_start_time_.nanoseconds()) >
-        20.0 * 1e9) {
+        10.0 * 1e9) {
       if (debug_ && annealing_) {
         RCLCPP_INFO(this->get_logger(), "Annealing finished");
       }
@@ -373,9 +397,10 @@ class VoronoiCalculator : public rclcpp::Node {
   rclcpp::Time annealing_start_time_;
   rclcpp::Duration annealing_duration_ = rclcpp::Duration::from_seconds(20);
   Eigen::Vector3d perturbation_;
+  Eigen::Quaterniond random_quaternion_;
   bool annealing_ = false;
-  const double perturbation_scale_ = 0.1;
-  const double zero_vel_threshold_ = 0.002;
+  const double perturbation_scale_ = 0.02;
+  const double zero_vel_threshold_ = 0.001;
 
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
