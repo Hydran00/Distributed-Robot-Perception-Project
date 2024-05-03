@@ -129,6 +129,15 @@ class VoronoiCalculator : public rclcpp::Node {
     for (size_t i = 0; i < faces_vertices_.size(); i++) {
       pdf_coeffs_.push_back(0.0);
     }
+
+    // Init robot velocity
+    // auto r1_pose = tf_buffer_1_->lookupTransform(voronoi_frame_,
+    // input_frame_,
+    //                                              tf2::TimePointZero, 10ms);
+    r1_last_pose_ = Eigen::Vector3d(0, 0, 0);
+    r1_trans_velocity_ = Eigen::Vector3d(0, 0, 0);
+    last_time_ = this->now();
+    annealing_start_time_ = this->now();
     std::cout << "Node started correctly" << std::endl;
   }
 
@@ -220,11 +229,11 @@ class VoronoiCalculator : public rclcpp::Node {
         pdf_coeffs_[pair.second] =
             std::max(pair.first, pdf_coeffs_[pair.second]);
       }
-      if (debug_) {
-        for (int i = 0; i < pdf_coeffs_.size(); i++) {
-          std::cout << "Face " << i << ": " << pdf_coeffs_[i] << std::endl;
-        }
-      }
+      // if (debug_) {
+      // for (int i = 0; i < pdf_coeffs_.size(); i++) {
+      //   std::cout << "Face " << i << ": " << pdf_coeffs_[i] << std::endl;
+      // }
+      // }
       // }
       // pdf_coeffs_[max_index] = max_value;
       // publish the pdf coefficients
@@ -235,6 +244,7 @@ class VoronoiCalculator : public rclcpp::Node {
       // publishTriangleList();
 
       // compute robot base
+
       auto base = tf_buffer_1_->lookupTransform(voronoi_frame_, base_frame_,
                                                 tf2::TimePointZero, 10ms);
       Eigen::Vector3d base_(base.transform.translation.x,
@@ -242,7 +252,9 @@ class VoronoiCalculator : public rclcpp::Node {
                             base.transform.translation.z);
       auto res = utils::integrateVectorValuedPdfOverPolyhedron(
           vertices, container_, container_pdf_, j, pdf_coeffs_, base_, 0.);
+
       // publish the result
+      simulateAnnealing();
       // project onto sphere surface
       res = utils::projectOnSphere(res, 0.3);
 
@@ -259,40 +271,15 @@ class VoronoiCalculator : public rclcpp::Node {
         // rotate q by 180 degrees on z axis
         Eigen::AngleAxisd angle_axis(M_PI, Eigen::Vector3d::UnitZ());
         q = q * Eigen::Quaterniond(angle_axis);
-        // print in red
-        // std::cout << "\033[1;31mbold "<< Eigen::AngleAxisd(q).angle()<<
-        // "\033[0m" << std::endl;
       }
       pose_.pose.orientation.x = q.x();
       pose_.pose.orientation.y = q.y();
       pose_.pose.orientation.z = q.z();
       pose_.pose.orientation.w = q.w();
 
-
       auto trans = tf_buffer_1_->lookupTransform(output_frame_, voronoi_frame_,
                                                  tf2::TimePointZero);
       tf2::doTransform(pose_, pose_, trans);
-
-      // TODO check that the pose is outside of the sphere
-      auto new_pose = Eigen::Vector3d(
-          pose_.pose.position.x, pose_.pose.position.y, pose_.pose.position.z);
-      pose_.pose.position.x = new_pose(0);
-      pose_.pose.position.y = new_pose(1);
-      pose_.pose.position.z = new_pose(2);
-
-      // slerp between current and new quaternion
-      // Eigen::Quaterniond q1(pose_.pose.orientation.w, pose_.pose.orientation.x,
-      //                       pose_.pose.orientation.y, pose_.pose.orientation.z);
-      // Eigen::Quaterniond q2(r1_pose_.transform.rotation.w,
-      //                       r1_pose_.transform.rotation.x,
-      //                       r1_pose_.transform.rotation.y,
-      //                       r1_pose_.transform.rotation.z);
-      // double t = 0.01;
-      // Eigen::Quaterniond q3 = q1.slerp(t, q2);
-      // pose_.pose.orientation.x = q3.x();
-      // pose_.pose.orientation.y = q3.y();
-      // pose_.pose.orientation.z = q3.z();
-      // pose_.pose.orientation.w = q3.w();
 
       target_pub_->publish(pose_);
       if (vertices.size() > 0) {
@@ -309,6 +296,44 @@ class VoronoiCalculator : public rclcpp::Node {
                    ex.what());
       // return;
     }
+  }
+  void simulateAnnealing() {
+    // SIMULATED ANNEALIING -> if the velocity is zero, we add a random noise
+    // to the pose
+    Eigen::Vector3d r1_current_pose(r1_pose_.transform.translation.x,
+                                    r1_pose_.transform.translation.y,
+                                    r1_pose_.transform.translation.z);
+    r1_trans_velocity_ = (r1_current_pose - r1_last_pose_) /
+                         (this->now() - last_time_).seconds();
+    // add noise
+
+    if (r1_trans_velocity_.norm() < zero_vel_threshold_) {
+      if (!annealing_) {
+        if (debug_) {
+          RCLCPP_INFO(this->get_logger(), "Starting annealing");
+        }
+        // if annealing starts now, generate a random perturbation
+        perturbation_ = Eigen::Vector3d::Random();  // * perturbation_scale_;
+        annealing_start_time_ = this->now();
+        annealing_ = true;
+      }
+    }
+    if (annealing_) {
+      pose_.pose.position.x += perturbation_(0);
+      pose_.pose.position.y += perturbation_(1);
+      pose_.pose.position.z += perturbation_(2);
+    }
+    if ((this->now().nanoseconds() - annealing_start_time_.nanoseconds()) >
+        20.0 * 1e9) {
+      if (debug_ && annealing_) {
+        RCLCPP_INFO(this->get_logger(), "Annealing finished");
+      }
+      annealing_ = false;
+    }
+
+    // Update the last pose and time
+    r1_last_pose_ = r1_current_pose;
+    last_time_ = this->now();
   }
 
   // subscribers and publishers
@@ -339,6 +364,18 @@ class VoronoiCalculator : public rclcpp::Node {
   std::string target_topic_;
   double center_x_, center_y_, center_z_;
   bool debug_;
+
+  // simulated annealing
+  geometry_msgs::msg::PoseStamped r1_velocity_;
+  Eigen::Vector3d r1_last_pose_;
+  Eigen::Vector3d r1_trans_velocity_;
+  rclcpp::Time last_time_;
+  rclcpp::Time annealing_start_time_;
+  rclcpp::Duration annealing_duration_ = rclcpp::Duration::from_seconds(20);
+  Eigen::Vector3d perturbation_;
+  bool annealing_ = false;
+  const double perturbation_scale_ = 0.1;
+  const double zero_vel_threshold_ = 0.002;
 
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;

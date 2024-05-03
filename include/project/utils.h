@@ -390,19 +390,19 @@ void publishMarker(
     arrow_msg.id = (int)faces_vertices.size() + i + 1;
     arrows.push_back(arrow_msg);
   }
-  // // CURRENT ORIENTATION
-  arrow_msg.points.clear();
-  normal.x = 0.0;
-  normal.y = 0.0;
-  normal.z = 0.0;
-  arrow_msg.points.push_back(normal);
-  normal.x = current_rot_vec(0);
-  normal.y = current_rot_vec(1);
-  normal.z = current_rot_vec(2);
-  arrow_msg.points.push_back(normal);
-  arrow_msg.id = 2 * (int)faces_vertices.size() + 1;
-  arrow_msg.color.g = 1.0;
-  arrow_msg.color.r = 0.0;
+  // // // CURRENT ORIENTATION
+  // arrow_msg.points.clear();
+  // normal.x = 0.0;
+  // normal.y = 0.0;
+  // normal.z = 0.0;
+  // arrow_msg.points.push_back(normal);
+  // normal.x = current_rot_vec(0);
+  // normal.y = current_rot_vec(1);
+  // normal.z = current_rot_vec(2);
+  // arrow_msg.points.push_back(normal);
+  // arrow_msg.id = 2 * (int)faces_vertices.size() + 1;
+  // arrow_msg.color.g = 1.0;
+  // arrow_msg.color.r = 0.0;
 
   // // std::cout << "/////////////////" << std::endl;
   marker_array.markers.push_back(mesh_msg);
@@ -412,7 +412,7 @@ void publishMarker(
   // for (auto arrow : arrows) {
   //   marker_array.markers.push_back(arrow);
   // }
-  marker_array.markers.push_back(arrow_msg);
+  // marker_array.markers.push_back(arrow_msg);
   markers_publisher->publish(marker_array);
 }
 std::vector<std::pair<double, int>> getTopKWithIndices(const std::vector<double> &nums, int k) {

@@ -3,6 +3,8 @@ from launch import LaunchDescription
 import xacro,os
 from launch_ros.actions import Node
 from launch.actions import TimerAction
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 # from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 import os
@@ -32,12 +34,14 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         arguments=['0', '0', '0', '0', '0', '0', '1_base_link', '1_camera'],
+        parameters=[{"use_sim_time": True}],
         output='screen',
     )
     static_trans_broadcaster2 = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         arguments=['0', '0', '0', '0', '0', '0', '2_base_link', '2_camera'],
+        parameters=[{"use_sim_time": True}],
         output='screen',
     )
     
@@ -65,13 +69,22 @@ def generate_launch_description():
         parameters=[{"use_sim_time": True}]
     )
 
+        # include the launch file for point clouds
+    point_clouds_converter = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(get_package_share_directory('ur_coppeliasim'), 'launch', 'pc2_coppeliasim.launch.py')
+        ),
+        launch_arguments=[('prefixes', PREFIX_LIST),('handle_name_1','/depth1'), ('handle_name_2','/depth2')]
+    )
+
     node_list = TimerAction(period=0.0,
             actions=[
                 static_trans_broadcaster1,
                 static_trans_broadcaster2,
                 tf_pub1,
                 tf_pub2,
-                # pointcloud_accumulator,
+                point_clouds_converter,
+                pointcloud_accumulator,
                 rviz,
                 
             ])
