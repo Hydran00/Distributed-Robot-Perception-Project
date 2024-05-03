@@ -236,11 +236,14 @@ Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
   if (std::abs(dot - (-1.0)) < 1.0e-10) {
     // 180 degrees rotation around any vector perpendicular to the target
     // direction
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "ANTI-PARALLEL");
     Eigen::Vector3d axis = direction.unitOrthogonal();
     q = Eigen::Quaterniond::FromTwoVectors(up, axis);
   } else if (std::abs(dot - 1.0) < 1.0e-10) {
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "PARALLEL");
     q = Eigen::Quaterniond::Identity();
   } else {
+
     // General case
     double angle = acos(dot);
     Eigen::Vector3d axis = up.cross(direction).normalized();
