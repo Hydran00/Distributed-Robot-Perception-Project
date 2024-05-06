@@ -149,6 +149,7 @@ class VoronoiCalculator : public rclcpp::Node {
       pdf_coeffs_[i] = std::max(msg->data[i], pdf_coeffs_[i]);
     }
   }
+
   void updateVoronoi() {
     try {
       r1_pose_ = tf_buffer_1_->lookupTransform(
@@ -258,7 +259,7 @@ class VoronoiCalculator : public rclcpp::Node {
       //   std::cout << "Integral Result: " << res.transpose() << std::endl;
       // }
       // project onto sphere surface
-      res = utils::projectOnSphere(res, 0.3);
+      res = utils::projectOnSphere(res, sphere_radius_);
 
       pose_.header.stamp = this->now();
       pose_.header.frame_id = voronoi_frame_;
@@ -302,15 +303,15 @@ class VoronoiCalculator : public rclcpp::Node {
       // return;
     }
   }
+
   void simulateAnnealing() {
-    // SIMULATED ANNEALIING -> if the velocity is zero, we add a random noise
-    // to the pose
+    // SIMULATED ANNEALIING:
+    //    if the velocity is zero, we add a random noise to the pose
     Eigen::Vector3d r1_current_pose(r1_pose_.transform.translation.x,
                                     r1_pose_.transform.translation.y,
                                     r1_pose_.transform.translation.z);
     r1_trans_velocity_ = (r1_current_pose - r1_last_pose_) /
                          (this->now() - last_time_).seconds();
-    // add noise
     // if(debug_){
     //   RCLCPP_INFO_STREAM(this->get_logger(), "Current pose: " << r1_current_pose.transpose());
     //   RCLCPP_INFO_STREAM(this->get_logger(), "Last pose: " << r1_last_pose_.transpose());
@@ -320,21 +321,18 @@ class VoronoiCalculator : public rclcpp::Node {
         if (debug_) {
           RCLCPP_INFO(this->get_logger(), "Starting annealing");
         }
-        // if annealing starts now, generate a random perturbation over the
-        // sphere using quaternion slerp
 
-        // include prefix into srand (1_ becomes 1)
-
+        //generate a random perturbation over the sphere using quaternion slerp
         srand(time(NULL) + (int)(prefix_1_[0] - '0'));
         perturbation_ = Eigen::Vector3d::Random() * perturbation_scale_;
         perturbation_[2] = 0.0;
-
-        // select 3 random coefficients
 
         annealing_start_time_ = this->now();
         annealing_ = true;
       }
     }
+
+    // perform annealing until the flag is set to false
     if (annealing_) {
       geometry_msgs::msg::PoseStamped annealing_pose;
       annealing_pose.pose.position.x = perturbation_(0);
@@ -342,18 +340,18 @@ class VoronoiCalculator : public rclcpp::Node {
       annealing_pose.pose.position.z = perturbation_(2);
 
       auto trans = tf_buffer_1_->lookupTransform(voronoi_frame_,
-      input_frame_,
-                                                 tf2::TimePointZero, 10ms);
+        input_frame_, tf2::TimePointZero, 10ms);
       tf2::doTransform(annealing_pose, pose_, trans);
       // project onto sphere surface
       Eigen::Vector3d res(pose_.pose.position.x,
                           pose_.pose.position.y,
                           pose_.pose.position.z);
-      res = utils::projectOnSphere(res, 0.3);
+      res = utils::projectOnSphere(res, sphere_radius_);
       pose_.pose.position.x = res(0);
       pose_.pose.position.y = res(1);
       pose_.pose.position.z = res(2);
     }
+
     if ((this->now().nanoseconds() - annealing_start_time_.nanoseconds()) >
         20.0 * 1e9) {
       if (debug_ && annealing_) {
@@ -408,6 +406,8 @@ class VoronoiCalculator : public rclcpp::Node {
   bool annealing_ = false;
   const double perturbation_scale_ = 0.05;
   const double zero_vel_threshold_ = 0.001;
+
+  const double sphere_radius_ = 0.4;
 
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
