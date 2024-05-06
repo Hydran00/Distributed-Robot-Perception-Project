@@ -20,12 +20,14 @@
 #include "voro++.hh"
 
 namespace utils {
+
+// Custom mass function used to compute the center of mass of a polyhedron
 double test_pdf(double x, double y, double z, Eigen::Vector3d robot_base,
                 double radius) {
   // Eigen::Vector3d current_pos(x, y, z);
-  // if (z < 0) {
-    // return 0;
-  // }
+  if (z < 0) {
+    return 0;
+  }
 
   // if ((robot_base - current_pos).norm() > radius) {
   //   return 0;
@@ -50,6 +52,7 @@ double multivariate_gaussian_pdf(Eigen::Vector3d point, Eigen::Vector3d mean,
   return normalization * exp(exponent);
 }
 
+// Function to compute integral of a vector valued pdf over a polyhedron
 Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
     std::vector<Eigen::Vector3d> &vertices,
     std::shared_ptr<voro::container> con,
@@ -123,6 +126,7 @@ Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
   return (1 / mass) * com;
 }
 
+// Function to compute the center of mass of a polyhedron
 Eigen::Vector3d computeCenter(const std::vector<Eigen::Vector3d> &vertices,
                               const Eigen::Vector3d &center) {
   Eigen::Vector3d result(0, 0, 0);
@@ -132,7 +136,7 @@ Eigen::Vector3d computeCenter(const std::vector<Eigen::Vector3d> &vertices,
   return result / vertices.size();
 };
 
-// passing array
+// Function used to cut a container into an icosahedron
 void initIcosahedronPlanes(
     std::vector<std::shared_ptr<voro::wall_plane>> &walls, int scale = 1) {
   const double Phi = 0.5 * (1 + sqrt(5.0));
@@ -199,6 +203,7 @@ void initIcosahedronPlanes(
   walls.push_back(p20);
 }
 
+// Function to compute the angle between two normals
 double angleBetweenNormals(const Eigen::Vector3d &normal1,
                            const Eigen::Vector3d &normal2) {
   auto normal1_ = normal1.normalized();
@@ -219,6 +224,7 @@ double angleBetweenNormals(const Eigen::Vector3d &normal1,
   //             pow(normal1_(2) - normal2_(2), 2));
 }
 
+// Function to compute the quaternion that rotates the z-axis to the direction
 Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
                                      const Eigen::Vector3d &center) {
   const Eigen::Vector3d direction = (center - point).normalized();
@@ -253,6 +259,8 @@ Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
   return q;
   // }
 }
+
+// Function to project a point on a sphere
 Eigen::Vector3d projectOnSphere(Eigen::Vector3d pose, double radius) {
   auto pose_norm = pose.normalized();
   return radius * pose_norm;
@@ -280,6 +288,8 @@ std::vector<double> generateColormap(int numColors,
   }
   return coloredArray;
 }
+
+// Function to publish the voronoi vertices
 void publishVoronoiVertices(
     const rclcpp::Time &stamp, const std::vector<Eigen::Vector3d> &vertices,
     const std::string &voronoi_frame_,
@@ -301,6 +311,8 @@ void publishVoronoiVertices(
 
   voronoi_vertices_pub->publish(voronoi_vertices);
 }
+
+// Function to publish a marker_array containing the voronoi vertices
 void publishMarker(
     const rclcpp::Time &stamp,
     visualization_msgs::msg::MarkerArray &marker_array,
@@ -418,6 +430,8 @@ void publishMarker(
   // marker_array.markers.push_back(arrow_msg);
   markers_publisher->publish(marker_array);
 }
+
+// Function to get the top k coefficients of the bitmap
 std::vector<std::pair<double, int>> getTopKWithIndices(const std::vector<double> &nums, int k) {
   std::vector<std::pair<double, int>> indexedNums(nums.size());
   for (int i = 0; i < nums.size(); ++i) {
@@ -432,5 +446,7 @@ std::vector<std::pair<double, int>> getTopKWithIndices(const std::vector<double>
   }
   return topkWithIndices;
 }
+
 }  // namespace utils
+
 #endif
