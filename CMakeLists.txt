@@ -64,7 +64,7 @@ set_target_properties(libvoro++ PROPERTIES IMPORTED_LOCATION ${libvoro++_loc})
 
 target_link_libraries(voronoi_calculator libvoro++)
 target_include_directories(voronoi_calculator PUBLIC include/)
-ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros tf2 tf2_geometry_msgs visualization_msgs)
+ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros tf2 tf2_geometry_msgs pcl_ros visualization_msgs)
 
 ################ Function integrator ##############################
 

@@ -8,9 +8,17 @@
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/point_cloud2.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
+// PCL ROS
+#include <pcl/features/normal_3d.h>
+#include <pcl/filters/project_inliers.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/surface/convex_hull.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 // tf2
 #include <tf2_ros/buffer.h>
@@ -102,9 +110,14 @@ class VoronoiCalculator : public rclcpp::Node {
             "/pdf_coeffs" + prefix_2_, 1,
             std::bind(&VoronoiCalculator::pdfCoeffsCallback, this,
                       std::placeholders::_1));
-    markers_publisher_ =
-        this->create_publisher<visualization_msgs::msg::MarkerArray>(
-            "markers" + prefix_1_, 1);
+    point_cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+        "/total_cloud", 1,
+        std::bind(&VoronoiCalculator::pointCloudCallback, this,
+                  std::placeholders::_1));
+    cloud_ =
+        pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
+    markers_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "markers" + prefix_1_, 1);
 
     // print params
     RCLCPP_INFO(this->get_logger(), "DEBUG FLAG: %d", debug_);
@@ -143,6 +156,9 @@ class VoronoiCalculator : public rclcpp::Node {
   }
 
  private:
+  void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+    pcl::fromROSMsg(*msg, *cloud_);
+  }
   void pdfCoeffsCallback(
       const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
     for (size_t i = 0; i < msg->data.size(); i++) {
@@ -151,9 +167,34 @@ class VoronoiCalculator : public rclcpp::Node {
   }
 
   void updateVoronoi() {
+    // compute convex hull
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_hull(
+        new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::ConvexHull<pcl::PointXYZ> chull;
+    chull.setInputCloud(cloud_);
+    chull.reconstruct(*cloud_hull);
+
+    // extract face vertices
+    for (std::size_t i = 0; i < polygons.size(); ++i) {
+      const pcl::Vertices &face1 = polygons[i];
+      for (std::size_t j = 0; j < face1.vertices.size(); ++j) {
+        const pcl::PointXYZ &pt = cloud_hull->points[face1.vertices[j]];
+        hull_vertices_.push_back(Eigen::Vector3d(pt.x, pt.y, pt.z));
+      }
+    }
+    // clear map
+    for (size_t i = 0; i < faces_vertices_.size(); i++) {
+      faces_vertices_[i].clear();
+    }
+    // set face vertices map
+    for (size_t i = 0; i < faces_vertices_.size(); i++) {
+      faces_vertices_[i] = hull_vertices_;
+    }
+
+
     try {
-      r1_pose_ = tf_buffer_1_->lookupTransform(
-          voronoi_frame_, input_frame_, tf2::TimePointZero, 10ms);
+      r1_pose_ = tf_buffer_1_->lookupTransform(voronoi_frame_, input_frame_,
+                                               tf2::TimePointZero, 10ms);
       r2_pose_ = tf_buffer_2_->lookupTransform(
           voronoi_frame_, input_frame_other_robot_, tf2::TimePointZero, 10ms);
 
@@ -295,7 +336,7 @@ class VoronoiCalculator : public rclcpp::Node {
       utils::publishMarker(this->now(), marker_array_, prefix_1_,
                            voronoi_frame_, faces_centers_, faces_normals_,
                            rotmat.col(2).normalized(), faces_vertices_,
-                           pdf_coeffs_, markers_publisher_);
+                           pdf_coeffs_, markers_pub_);
 
     } catch (tf2::TransformException &ex) {
       RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
@@ -313,8 +354,9 @@ class VoronoiCalculator : public rclcpp::Node {
     r1_trans_velocity_ = (r1_current_pose - r1_last_pose_) /
                          (this->now() - last_time_).seconds();
     // if(debug_){
-    //   RCLCPP_INFO_STREAM(this->get_logger(), "Current pose: " << r1_current_pose.transpose());
-    //   RCLCPP_INFO_STREAM(this->get_logger(), "Last pose: " << r1_last_pose_.transpose());
+    //   RCLCPP_INFO_STREAM(this->get_logger(), "Current pose: " <<
+    //   r1_current_pose.transpose()); RCLCPP_INFO_STREAM(this->get_logger(),
+    //   "Last pose: " << r1_last_pose_.transpose());
     // }
     if (r1_trans_velocity_.norm() < zero_vel_threshold_) {
       if (!annealing_) {
@@ -322,7 +364,7 @@ class VoronoiCalculator : public rclcpp::Node {
           RCLCPP_INFO(this->get_logger(), "Starting annealing");
         }
 
-        //generate a random perturbation over the sphere using quaternion slerp
+        // generate a random perturbation over the sphere using quaternion slerp
         srand(time(NULL) + (int)(prefix_1_[0] - '0'));
         perturbation_ = Eigen::Vector3d::Random() * perturbation_scale_;
         perturbation_[2] = 0.0;
@@ -339,12 +381,11 @@ class VoronoiCalculator : public rclcpp::Node {
       annealing_pose.pose.position.y = perturbation_(1);
       annealing_pose.pose.position.z = perturbation_(2);
 
-      auto trans = tf_buffer_1_->lookupTransform(voronoi_frame_,
-        input_frame_, tf2::TimePointZero, 10ms);
+      auto trans = tf_buffer_1_->lookupTransform(voronoi_frame_, input_frame_,
+                                                 tf2::TimePointZero, 10ms);
       tf2::doTransform(annealing_pose, pose_, trans);
       // project onto sphere surface
-      Eigen::Vector3d res(pose_.pose.position.x,
-                          pose_.pose.position.y,
+      Eigen::Vector3d res(pose_.pose.position.x, pose_.pose.position.y,
                           pose_.pose.position.z);
       res = utils::projectOnSphere(res, sphere_radius_);
       pose_.pose.position.x = res(0);
@@ -373,8 +414,10 @@ class VoronoiCalculator : public rclcpp::Node {
       pdf_coeffs_pub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr
       pdf_coeffs_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr
+      point_cloud_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
-      markers_publisher_;
+      markers_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   // get robot end effector pose
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_1_, tf_buffer_2_;
@@ -383,8 +426,10 @@ class VoronoiCalculator : public rclcpp::Node {
   // utils
   geometry_msgs::msg::TransformStamped r1_pose_, r2_pose_;
   geometry_msgs::msg::PoseStamped pose_;
-  std::vector<Eigen::Vector3d> vertices;
+  std::vector<Eigen::Vector3d> vertices, hull_vertices_;
+
   visualization_msgs::msg::MarkerArray marker_array_;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_;
   std::string input_frame_, input_frame_other_robot_;
   std::string prefix_1_, prefix_2_;
   std::string voronoi_frame_;
