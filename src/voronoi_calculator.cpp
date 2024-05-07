@@ -13,11 +13,7 @@
 #include "visualization_msgs/msg/marker.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 // PCL ROS
-#include <pcl/features/normal_3d.h>
-#include <pcl/filters/project_inliers.h>
 #include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/surface/convex_hull.h>
 #include <pcl_conversions/pcl_conversions.h>
 
 // tf2
@@ -110,6 +106,16 @@ class VoronoiCalculator : public rclcpp::Node {
             "/pdf_coeffs" + prefix_2_, 1,
             std::bind(&VoronoiCalculator::pdfCoeffsCallback, this,
                       std::placeholders::_1));
+    mean_min_dist_pub_ =
+        this->create_publisher<std_msgs::msg::Float64MultiArray>(
+            "/mean_min_dist" + prefix_1_, 1);
+
+    mean_min_dist_sub_ =
+        this->create_subscription<std_msgs::msg::Float64MultiArray>(
+            "/mean_min_dist" + prefix_2_, 1,
+            std::bind(&VoronoiCalculator::meanMinDistCoeffsCallback, this,
+                      std::placeholders::_1));
+
     point_cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/total_cloud", 1,
         std::bind(&VoronoiCalculator::pointCloudCallback, this,
@@ -139,11 +145,14 @@ class VoronoiCalculator : public rclcpp::Node {
                                center_x_, center_y_, center_z_, faces_vertices_,
                                faces_centers_, faces_normals_, container_pdf_,
                                planes_pdf_);
+
+    for (int i = 0; i < faces_vertices_.size(); i++) {
+      mean_dist_with_nearest_.push_back(0.0);
+    }
     // initialize pdf coefficients
     for (size_t i = 0; i < faces_vertices_.size(); i++) {
       pdf_coeffs_.push_back(0.0);
     }
-
     // Init robot velocity
     // auto r1_pose = tf_buffer_1_->lookupTransform(voronoi_frame_,
     // input_frame_,
@@ -157,6 +166,7 @@ class VoronoiCalculator : public rclcpp::Node {
 
  private:
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+    std::cout << "Received point cloud" << std::endl;
     pcl::fromROSMsg(*msg, *cloud_);
   }
   void pdfCoeffsCallback(
@@ -165,33 +175,19 @@ class VoronoiCalculator : public rclcpp::Node {
       pdf_coeffs_[i] = std::max(msg->data[i], pdf_coeffs_[i]);
     }
   }
+  void meanMinDistCoeffsCallback(
+      const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
+    for (size_t i = 0; i < msg->data.size(); i++) {
+      mean_dist_with_nearest_[i] =
+          std::max(msg->data[i], mean_dist_with_nearest_[i]);
+    }
+  }
 
   void updateVoronoi() {
-    // compute convex hull
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_hull(
-        new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::ConvexHull<pcl::PointXYZ> chull;
-    chull.setInputCloud(cloud_);
-    chull.reconstruct(*cloud_hull);
-
-    // extract face vertices
-    for (std::size_t i = 0; i < polygons.size(); ++i) {
-      const pcl::Vertices &face1 = polygons[i];
-      for (std::size_t j = 0; j < face1.vertices.size(); ++j) {
-        const pcl::PointXYZ &pt = cloud_hull->points[face1.vertices[j]];
-        hull_vertices_.push_back(Eigen::Vector3d(pt.x, pt.y, pt.z));
-      }
+    std::cout << "Updating voronoi" << std::endl;
+    if (cloud_->size() == 0) {
+      return;
     }
-    // clear map
-    for (size_t i = 0; i < faces_vertices_.size(); i++) {
-      faces_vertices_[i].clear();
-    }
-    // set face vertices map
-    for (size_t i = 0; i < faces_vertices_.size(); i++) {
-      faces_vertices_[i] = hull_vertices_;
-    }
-
-
     try {
       r1_pose_ = tf_buffer_1_->lookupTransform(voronoi_frame_, input_frame_,
                                                tf2::TimePointZero, 10ms);
@@ -228,7 +224,6 @@ class VoronoiCalculator : public rclcpp::Node {
       bool success = container_->find_voronoi_cell(
           r1_pose_.transform.translation.x, r1_pose_.transform.translation.y,
           r1_pose_.transform.translation.z, rx, ry, rz, j);
-
       voro::c_loop_all cla(*container_);
       voro::voronoicell c;
       if (cla.start()) do {
@@ -252,6 +247,18 @@ class VoronoiCalculator : public rclcpp::Node {
         utils::publishVoronoiVertices(this->now(), vertices, voronoi_frame_,
                                       voronoi_vertices_pub_);
       }
+
+      std::vector<double> dists(faces_vertices_.size(), 0.0);
+      utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_);
+      std::cout <<"C"<<std::endl;
+
+      for (int i = 0; i < mean_dist_with_nearest_.size(); i++) {
+        mean_dist_with_nearest_[i] =
+            max(mean_dist_with_nearest_[i], dists[i] / 0.01);
+        // std::cout << "Mean distance for cell " << i << ": "
+        //           << mean_dist_with_nearest_[i] << std::endl;
+      }
+
       Eigen::Quaterniond quat(
           r1_pose_.transform.rotation.w, r1_pose_.transform.rotation.x,
           r1_pose_.transform.rotation.y, r1_pose_.transform.rotation.z);
@@ -263,15 +270,17 @@ class VoronoiCalculator : public rclcpp::Node {
       // compute the pdf coefficient
       for (size_t i = 0; i < faces_normals_.size(); i++) {
         // update just the top 3 face
+
         angles.push_back(utils::angleBetweenNormals(
             faces_normals_[i], rotmat.col(2).normalized()));
       }
-      auto top3value_ids = utils::getTopKWithIndices(angles, 3);
+      auto topvalue_ids = utils::getTopKWithIndices(angles, 3);
 
-      for (auto pair : top3value_ids) {
+      for (auto pair : topvalue_ids) {
         pdf_coeffs_[pair.second] =
             std::max(pair.first, pdf_coeffs_[pair.second]);
       }
+
       // if (debug_) {
       // for (int i = 0; i < pdf_coeffs_.size(); i++) {q
       //   std::cout << "Face " << i << ": " << pdf_coeffs_[i] << std::endl;
@@ -284,17 +293,21 @@ class VoronoiCalculator : public rclcpp::Node {
       msg.data = pdf_coeffs_;
 
       pdf_coeffs_pub_->publish(msg);
+      msg.data = mean_dist_with_nearest_;
+      mean_min_dist_pub_->publish(msg);
       // publishTriangleList();
 
       // compute robot base
 
       auto base = tf_buffer_1_->lookupTransform(voronoi_frame_, base_frame_,
                                                 tf2::TimePointZero, 10ms);
-      Eigen::Vector3d base_(base.transform.translation.x,
-                            base.transform.translation.y,
-                            base.transform.translation.z);
+
+      std::vector<double> multipliers;
+      for(size_t i=0; i<faces_centers_.size(); i++){
+        multipliers.push_back(ALPHA * pdf_coeffs_[i] + (1-ALPHA) * mean_dist_with_nearest_[i]);
+      }
       auto res = utils::integrateVectorValuedPdfOverPolyhedron(
-          vertices, container_, container_pdf_, j, pdf_coeffs_, base_, 0.);
+          vertices, container_, container_pdf_, j, multipliers);
 
       // if (debug_) {
       //   std::cout << "Integral Result: " << res.transpose() << std::endl;
@@ -309,7 +322,7 @@ class VoronoiCalculator : public rclcpp::Node {
       pose_.pose.position.z = res(2);  // r1_z;
 
       // publish the result
-      simulateAnnealing();
+      // simulateAnnealing();
 
       auto q = utils::computeQuaternion(
           Eigen::Vector3d(r1_x, r1_y, r1_z).normalized(),
@@ -333,11 +346,12 @@ class VoronoiCalculator : public rclcpp::Node {
         vertices.clear();
       }
 
-      utils::publishMarker(this->now(), marker_array_, prefix_1_,
-                           voronoi_frame_, faces_centers_, faces_normals_,
-                           rotmat.col(2).normalized(), faces_vertices_,
-                           pdf_coeffs_, markers_pub_);
-
+      // utils::publishMarker(this->now(), marker_array_, prefix_1_,
+      //                      voronoi_frame_, faces_centers_, faces_normals_,
+      //                      rotmat.col(2).normalized(), faces_vertices_,
+      //                      pdf_coeffs_, markers_pub_);
+      utils::publishMarker(this->now(), faces_vertices_, pdf_coeffs_, prefix_1_,
+                           voronoi_frame_, marker_array_, markers_pub_);
     } catch (tf2::TransformException &ex) {
       RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
                    ex.what());
@@ -418,6 +432,11 @@ class VoronoiCalculator : public rclcpp::Node {
       point_cloud_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
       markers_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr
+      mean_min_dist_pub_;
+  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr
+      mean_min_dist_sub_;
+
   rclcpp::TimerBase::SharedPtr timer_;
   // get robot end effector pose
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_1_, tf_buffer_2_;
@@ -426,7 +445,7 @@ class VoronoiCalculator : public rclcpp::Node {
   // utils
   geometry_msgs::msg::TransformStamped r1_pose_, r2_pose_;
   geometry_msgs::msg::PoseStamped pose_;
-  std::vector<Eigen::Vector3d> vertices, hull_vertices_;
+  std::vector<Eigen::Vector3d> vertices;
 
   visualization_msgs::msg::MarkerArray marker_array_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_;
@@ -453,7 +472,7 @@ class VoronoiCalculator : public rclcpp::Node {
   const double zero_vel_threshold_ = 0.001;
 
   const double sphere_radius_ = 0.4;
-
+  const double ALPHA = 0.5;
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
   const double con_size_ymin = -2.0, con_size_ymax = 2.0;
@@ -466,6 +485,7 @@ class VoronoiCalculator : public rclcpp::Node {
   std::vector<Eigen::Vector3d> faces_normals_;
   std::map<int, std::vector<Eigen::Vector3d>> faces_vertices_;
   std::vector<double> pdf_coeffs_;
+  std::vector<double> mean_dist_with_nearest_;
   // log
 };
 

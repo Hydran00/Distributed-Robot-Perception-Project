@@ -3,6 +3,8 @@
 #define _USE_MATH_DEFINES
 
 #include <math.h>
+#include <pcl/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 #include <Eigen/Dense>
 #include <cmath>
@@ -22,12 +24,11 @@
 namespace utils {
 
 // Custom mass function used to compute the center of mass of a polyhedron
-double test_pdf(double x, double y, double z, Eigen::Vector3d robot_base,
-                double radius) {
+double test_pdf(double x, double y, double z) {
   // Eigen::Vector3d current_pos(x, y, z);
-  if (z < 0) {
-    return 0;
-  }
+  // if (z < 0) {
+  //   return 0;
+  // }
 
   // if ((robot_base - current_pos).norm() > radius) {
   //   return 0;
@@ -57,8 +58,7 @@ Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
     std::vector<Eigen::Vector3d> &vertices,
     std::shared_ptr<voro::container> con,
     std::shared_ptr<voro::container> con_pdf, int cell_idx,
-    std::vector<double> multipliers, Eigen::Vector3d robot_base,
-    double radius) {
+    std::vector<double> multipliers) {
   Eigen::Vector3d result(3);
   result << 0, 0, 0;
 
@@ -111,10 +111,9 @@ Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
             // if ((1-multipliers[tmp_cell_idx]) < 0.6) {
             //   continue;
             // }
-            pdf = (1 - multipliers[tmp_cell_idx]) *
-                  // test_pdf(x, y, z, robot_base, radius);
-                  multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0),
-                                            2.0 * Eigen::Matrix3d::Identity());
+            pdf = (1 - multipliers[tmp_cell_idx]) * test_pdf(x, y, z);
+            // multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0),
+            //                           2.0 * Eigen::Matrix3d::Identity());
             mass += pdf;
             com += pdf * point;
           }
@@ -249,7 +248,6 @@ Eigen::Quaterniond computeQuaternion(const Eigen::Vector3d &point,
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "PARALLEL");
     q = Eigen::Quaterniond::Identity();
   } else {
-
     // General case
     double angle = acos(dot);
     Eigen::Vector3d axis = up.cross(direction).normalized();
@@ -315,13 +313,13 @@ void publishVoronoiVertices(
 // Function to publish a marker_array containing the voronoi vertices
 void publishMarker(
     const rclcpp::Time &stamp,
-    visualization_msgs::msg::MarkerArray &marker_array,
-    const std::string &prefix_1, const std::string &frame_id,
-    const std::vector<Eigen::Vector3d> &face_centers,
-    const std::vector<Eigen::Vector3d> &face_normals,
-    const Eigen::Vector3d &current_rot_vec,
+    // const std::vector<Eigen::Vector3d> &face_centers,
+    // const std::vector<Eigen::Vector3d> &face_normals,
+    // const Eigen::Vector3d &current_rot_vec,
     std::map<int, std::vector<Eigen::Vector3d>> &faces_vertices,
-    const std::vector<double> &pdf_coeffs,
+    const std::vector<double> &pdf_coeffs, const std::string &prefix_1,
+    const std::string &frame_id,
+    visualization_msgs::msg::MarkerArray &marker_array,
     const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
         markers_publisher) {
   marker_array.markers.clear();
@@ -377,9 +375,9 @@ void publishMarker(
   for (size_t i = 0; i < faces_vertices.size(); i++) {
     // auto vertices = faces_vertices[i];
     for (size_t j = 0; j < faces_vertices[i].size(); j++) {
-      p.x = faces_vertices[i][j](0) / 8;
-      p.y = faces_vertices[i][j](1) / 8;
-      p.z = faces_vertices[i][j](2) / 8;
+      p.x = faces_vertices[i][j](0) / 6;
+      p.y = faces_vertices[i][j](1) / 6;
+      p.z = faces_vertices[i][j](2) / 6;
       mesh_msg.points.push_back(p);
     }
     color.r = coloredArray[i];
@@ -387,23 +385,29 @@ void publishMarker(
     color.b = coloredArray[i];
     color.a = 1.0;
     mesh_msg.colors.push_back(color);
-    text_msg.pose.position.x = face_centers[i](0) / 2;
-    text_msg.pose.position.y = face_centers[i](1) / 2;
-    text_msg.pose.position.z = face_centers[i](2) / 2;
+    // compute face center
+    Eigen::Vector3d face_center = Eigen::Vector3d::Zero();
+    for (size_t j = 0; j < faces_vertices[i].size(); j++) {
+      face_center += faces_vertices[i][j];
+    }
+    face_center /= faces_vertices[i].size();
+    text_msg.pose.position.x = face_center(0) / 5;
+    text_msg.pose.position.y = face_center(1) / 5;
+    text_msg.pose.position.z = face_center(2) / 5;
     text_msg.text = std::to_string(i);
     text_msg.id = i + 1;
     texts.push_back(text_msg);
     arrow_msg.points.clear();
-    normal.x = 0.0;
-    normal.y = 0.0;
-    normal.z = 0.0;
-    arrow_msg.points.push_back(normal);
-    normal.x = face_normals[i](0);
-    normal.y = face_normals[i](1);
-    normal.z = face_normals[i](2);
-    arrow_msg.points.push_back(normal);
-    arrow_msg.id = (int)faces_vertices.size() + i + 1;
-    arrows.push_back(arrow_msg);
+    // normal.x = 0.0;
+    // normal.y = 0.0;
+    // normal.z = 0.0;
+    // arrow_msg.points.push_back(normal);
+    // normal.x = face_normals[i](0);
+    // normal.y = face_normals[i](1);
+    // normal.z = face_normals[i](2);
+    // arrow_msg.points.push_back(normal);
+    // arrow_msg.id = (int)faces_vertices.size() + i + 1;
+    // arrows.push_back(arrow_msg);
   }
   // // // CURRENT ORIENTATION
   // arrow_msg.points.clear();
@@ -421,9 +425,9 @@ void publishMarker(
 
   // // std::cout << "/////////////////" << std::endl;
   marker_array.markers.push_back(mesh_msg);
-  for (auto text : texts) {
-    marker_array.markers.push_back(text);
-  }
+  // for (auto text : texts) {
+  //   marker_array.markers.push_back(text);
+  // }
   // for (auto arrow : arrows) {
   //   marker_array.markers.push_back(arrow);
   // }
@@ -432,7 +436,8 @@ void publishMarker(
 }
 
 // Function to get the top k coefficients of the bitmap
-std::vector<std::pair<double, int>> getTopKWithIndices(const std::vector<double> &nums, int k) {
+std::vector<std::pair<double, int>> getTopKWithIndices(
+    const std::vector<double> &nums, int k) {
   std::vector<std::pair<double, int>> indexedNums(nums.size());
   for (int i = 0; i < nums.size(); ++i) {
     indexedNums[i] = {nums[i], i};
@@ -445,6 +450,45 @@ std::vector<std::pair<double, int>> getTopKWithIndices(const std::vector<double>
     topkWithIndices.push_back(indexedNums[i]);
   }
   return topkWithIndices;
+}
+void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
+                                    std::shared_ptr<voro::container> container,
+                                    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
+  double x, y, z, rx, ry, rz;
+  int cell_idx;
+  std::vector<int> tot_points_per_cell;
+
+  for (int i = 0; i < container->total_particles(); i++) {
+    tot_points_per_cell.push_back(0);
+  }
+  std::cout <<"Cloud size"<< cloud->size() << std::endl;
+  for (int i = 0; i < cloud->size(); i++) {
+    x = cloud->points[i].x;
+    y = cloud->points[i].y;
+    z = cloud->points[i].z;
+    if (container->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
+      double min_dist = std::numeric_limits<double>::max();
+      for (int j = 0; j < cloud->size(); j++) {
+        if (i == j) {
+          continue;
+        }
+        double dist = sqrt(pow(x - cloud->points[j].x, 2) +
+                           pow(y - cloud->points[j].y, 2) +
+                           pow(z - cloud->points[j].z, 2));
+        if (dist < min_dist) {
+          min_dist = dist;
+        }
+      }
+      mean_dist_with_nearest[cell_idx] += min_dist;
+      tot_points_per_cell[cell_idx]++;
+    }
+  }
+  for (int i = 0; i < mean_dist_with_nearest.size(); i++) {
+    if (tot_points_per_cell[i] == 0) {
+      continue;
+    }
+    mean_dist_with_nearest[i] /= tot_points_per_cell[i];
+  }
 }
 
 }  // namespace utils

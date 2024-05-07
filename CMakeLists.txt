@@ -32,6 +32,21 @@ find_package(Eigen3 REQUIRED)
 foreach(Dependency IN ITEMS ${THIS_PACKAGE_INCLUDE_DEPENDS})
   find_package(${Dependency} REQUIRED)
 endforeach()
+################ hull calculator ###################################
+find_file(libvoro_include NAMES "voro++/")
+# message(STATUS ${libvoro_include})
+include_directories(${libvoro_include})
+
+find_library(libvoro++_loc NAMES libvoro++.a)
+# message(STATUS ${libvoro++_loc})
+
+add_library(libvoro++ STATIC IMPORTED)
+set_target_properties(libvoro++ PROPERTIES IMPORTED_LOCATION ${libvoro++_loc})
+
+add_executable(hull src/hull.cpp)
+target_include_directories(hull PUBLIC include/)
+ament_target_dependencies(hull rclcpp pcl_ros pcl_conversions sensor_msgs visualization_msgs)
+target_link_libraries(hull libvoro++)
 ################ tf publisher ###################################
 add_executable(tf_publisher src/tf_pub.cpp)
 ament_target_dependencies(tf_publisher rclcpp tf2_ros geometry_msgs)
@@ -52,15 +67,6 @@ target_link_libraries(pointcloud_accumulator ${PCL_LIBRARIES})
 
 add_executable(voronoi_calculator src/voronoi_calculator.cpp)
 
-find_file(libvoro_include NAMES "voro++/")
-# message(STATUS ${libvoro_include})
-include_directories(${libvoro_include})
-
-find_library(libvoro++_loc NAMES libvoro++.a)
-# message(STATUS ${libvoro++_loc})
-
-add_library(libvoro++ STATIC IMPORTED)
-set_target_properties(libvoro++ PROPERTIES IMPORTED_LOCATION ${libvoro++_loc})
 
 target_link_libraries(voronoi_calculator libvoro++)
 target_include_directories(voronoi_calculator PUBLIC include/)
@@ -72,7 +78,7 @@ ament_target_dependencies(voronoi_calculator rclcpp geometry_msgs tf2_ros tf2 tf
 # ament_target_dependencies(integrator rclcpp geometry_msgs tf2_ros tf2 tf2_geometry_msgs)
 
 
-INSTALL (TARGETS pointcloud_accumulator voronoi_calculator tf_publisher
+INSTALL (TARGETS pointcloud_accumulator voronoi_calculator tf_publisher hull
   DESTINATION lib/${PROJECT_NAME}
 )
 # python executable
