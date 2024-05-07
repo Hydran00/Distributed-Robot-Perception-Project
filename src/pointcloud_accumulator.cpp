@@ -83,7 +83,7 @@ class PointCloudAccumulator : public rclcpp::Node {
     pass_z_local.setFilterFieldName("z");
     pass_z_local.setFilterLimits(0.0, 1.0);
     pass_z_target.setFilterFieldName("z");
-    pass_z_target.setFilterLimits(0.02, 1.0);
+    pass_z_target.setFilterLimits(-1.0, 1.0);
 
     // log every param
     RCLCPP_INFO(this->get_logger(), "input_topic_1: %s",
@@ -124,8 +124,9 @@ class PointCloudAccumulator : public rclcpp::Node {
                          int id) {
     // transform_available = getTransform(total_cloud_frame_,
     // msg->header.frame_id, msg->header.stamp, id);
-    transform_available = getTransform(total_cloud_frame_, msg->header.frame_id,
-                                       tf2::TimePointZero, id);
+    tf2::TimePoint stamp = tf2_ros::fromMsg(msg->header.stamp);
+    transform_available =
+        getTransform(total_cloud_frame_, msg->header.frame_id, stamp, id);
 
     if (!transform_available) {
       return;
@@ -159,7 +160,6 @@ class PointCloudAccumulator : public rclcpp::Node {
     total_cloud_msg_.header = msg->header;
     total_cloud_msg_.header.frame_id = total_cloud_frame_;
     total_cloud_publisher_->publish(total_cloud_msg_);
-    std::cout << "total_cloud size: " << total_cloud_->size() << std::endl;
   }
 
   bool getTransform(const std::string &target_frame,
@@ -167,12 +167,13 @@ class PointCloudAccumulator : public rclcpp::Node {
                     const tf2::TimePoint &stamp, int id) {
     try {
       if (id == 1) {
-        transform_1_ = tf_buffer_1_->lookupTransform(target_frame, source_frame,
-                                                     tf2::TimePointZero);
+        transform_1_ =
+            tf_buffer_1_->lookupTransform(target_frame, source_frame, stamp);
         pcl_ros::transformAsMatrix(transform_1_, eigen_transform_1_);
       } else {
-        transform_2_ = tf_buffer_2_->lookupTransform(target_frame, source_frame,
-                                                     tf2::TimePointZero);
+        transform_2_ =
+            tf_buffer_2_->lookupTransform(target_frame, source_frame, stamp);
+
         pcl_ros::transformAsMatrix(transform_2_, eigen_transform_2_);
       }
       return true;

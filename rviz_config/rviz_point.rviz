@@ -10,8 +10,9 @@ Panels:
         - /Pose1
         - /Pose2
         - /PoseArray1
+        - /PointCloud21
       Splitter Ratio: 0.3382352888584137
-    Tree Height: 528
+    Tree Height: 1140
 Visualization Manager:
   Class: ""
   Displays:
@@ -125,7 +126,7 @@ Visualization Manager:
         Value: /voronoi_vertices1_
       Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
+      Enabled: false
       Name: MarkerArray
       Namespaces:
         {}
@@ -135,7 +136,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /markers1_
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -158,7 +159,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.009999999776482582
+      Size (m): 0.003000000026077032
       Style: Flat Squares
       Topic:
         Depth: 5
@@ -186,7 +187,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.8436402082443237
+      Distance: 1.0838137865066528
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -201,18 +202,18 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5503984093666077
+      Pitch: 0.5047963857650757
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 6.24358606338501
+      Yaw: 0.0004105567932128906
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 764
+  Height: 1376
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd000000010000000000000156000002a2fc0200000001fb000000100044006900730070006c006100790073010000003d000002a2000000c900ffffff00000390000002a200000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
-  Width: 1260
-  X: 1300
+  QMainWindow State: 000000ff00000000fd00000001000000000000015600000506fc0200000001fb000000100044006900730070006c006100790073010000003d00000506000000c900ffffff000008a40000050600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Width: 2560
+  X: 0
   Y: 27

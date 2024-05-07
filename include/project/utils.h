@@ -461,7 +461,6 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
   for (int i = 0; i < container->total_particles(); i++) {
     tot_points_per_cell.push_back(0);
   }
-  std::cout <<"Cloud size"<< cloud->size() << std::endl;
   for (int i = 0; i < cloud->size(); i++) {
     x = cloud->points[i].x;
     y = cloud->points[i].y;

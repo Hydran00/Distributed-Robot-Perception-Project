@@ -161,12 +161,13 @@ class VoronoiCalculator : public rclcpp::Node {
     r1_trans_velocity_ = Eigen::Vector3d(0, 0, 0);
     last_time_ = this->now();
     annealing_start_time_ = this->now();
+    //sleep 1s
+    rclcpp::sleep_for(1s);
     std::cout << "Node started correctly" << std::endl;
   }
 
  private:
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-    std::cout << "Received point cloud" << std::endl;
     pcl::fromROSMsg(*msg, *cloud_);
   }
   void pdfCoeffsCallback(
@@ -184,7 +185,6 @@ class VoronoiCalculator : public rclcpp::Node {
   }
 
   void updateVoronoi() {
-    std::cout << "Updating voronoi" << std::endl;
     if (cloud_->size() == 0) {
       return;
     }
@@ -250,7 +250,6 @@ class VoronoiCalculator : public rclcpp::Node {
 
       std::vector<double> dists(faces_vertices_.size(), 0.0);
       utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_);
-      std::cout <<"C"<<std::endl;
 
       for (int i = 0; i < mean_dist_with_nearest_.size(); i++) {
         mean_dist_with_nearest_[i] =
@@ -322,7 +321,7 @@ class VoronoiCalculator : public rclcpp::Node {
       pose_.pose.position.z = res(2);  // r1_z;
 
       // publish the result
-      // simulateAnnealing();
+      simulateAnnealing();
 
       auto q = utils::computeQuaternion(
           Eigen::Vector3d(r1_x, r1_y, r1_z).normalized(),
@@ -350,10 +349,10 @@ class VoronoiCalculator : public rclcpp::Node {
       //                      voronoi_frame_, faces_centers_, faces_normals_,
       //                      rotmat.col(2).normalized(), faces_vertices_,
       //                      pdf_coeffs_, markers_pub_);
-      utils::publishMarker(this->now(), faces_vertices_, pdf_coeffs_, prefix_1_,
+      utils::publishMarker(this->now(), faces_vertices_, multipliers, prefix_1_,
                            voronoi_frame_, marker_array_, markers_pub_);
     } catch (tf2::TransformException &ex) {
-      RCLCPP_ERROR(this->get_logger(), "Could not get transform: %s",
+      RCLCPP_ERROR(this->get_logger(), "CATCHING: Could not get transform: %s",
                    ex.what());
       // return;
     }
@@ -378,7 +377,7 @@ class VoronoiCalculator : public rclcpp::Node {
           RCLCPP_INFO(this->get_logger(), "Starting annealing");
         }
 
-        // generate a random perturbation over the sphere using quaternion slerp
+        // generate a random perturbation over the sphere
         srand(time(NULL) + (int)(prefix_1_[0] - '0'));
         perturbation_ = Eigen::Vector3d::Random() * perturbation_scale_;
         perturbation_[2] = 0.0;
@@ -408,7 +407,7 @@ class VoronoiCalculator : public rclcpp::Node {
     }
 
     if ((this->now().nanoseconds() - annealing_start_time_.nanoseconds()) >
-        20.0 * 1e9) {
+        annealing_duration_ * 1e9) {
       if (debug_ && annealing_) {
         RCLCPP_INFO(this->get_logger(), "Annealing finished");
       }
@@ -464,15 +463,15 @@ class VoronoiCalculator : public rclcpp::Node {
   Eigen::Vector3d r1_trans_velocity_;
   rclcpp::Time last_time_;
   rclcpp::Time annealing_start_time_;
-  rclcpp::Duration annealing_duration_ = rclcpp::Duration::from_seconds(20);
+  const double annealing_duration_ = 5.0; 
   Eigen::Vector3d perturbation_;
   Eigen::Quaterniond random_quaternion_;
   bool annealing_ = false;
   const double perturbation_scale_ = 0.05;
   const double zero_vel_threshold_ = 0.001;
 
-  const double sphere_radius_ = 0.4;
-  const double ALPHA = 0.5;
+  const double sphere_radius_ = 0.7;
+  const double ALPHA = 0.0;
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
   const double con_size_ymin = -2.0, con_size_ymax = 2.0;
