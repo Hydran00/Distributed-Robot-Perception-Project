@@ -487,7 +487,7 @@ class VoronoiCalculator : public rclcpp::Node {
   const double zero_vel_threshold_ = 0.001;
 
   const double sphere_radius_ = 0.7;
-  const double ALPHA = 0.3;
+  const double ALPHA = 0.5;
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
   const double con_size_ymin = -2.0, con_size_ymax = 2.0;

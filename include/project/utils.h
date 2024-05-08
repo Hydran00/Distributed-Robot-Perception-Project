@@ -507,6 +507,73 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
   }
 }
 
+// void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
+//                                     std::shared_ptr<voro::container> container,
+//                                     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
+//   // variables initialization
+//   double x, y, z, rx, ry, rz;
+//   int cell_idx;
+//   std::vector<int> tot_points_per_cell;
+//   std::vector<int> cell_idxs;
+
+//   // set the current number of points per cell to 0
+//   for (int i = 0; i < container->total_particles(); i++) {
+//     tot_points_per_cell.push_back(0);
+//   }
+
+//   // for each point of the point-cloud find the cell it belongs to
+//   for (int i = 0; i < cloud->size(); i++) {
+//     // populate x,y,z with point coordinates
+//     x = cloud->points[i].x;
+//     y = cloud->points[i].y;
+//     z = cloud->points[i].z;
+//     // find the voronoi cell that contains the point
+//     if (container->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
+//       cell_idxs.push_back(cell_idx);
+//     } else {
+//       cell_idxs.push_back(-1);
+//     }
+//   }
+
+//   // first iteration to compute the mean distance with the nearest point
+//   for (int i = 0; i < cloud->size(); i++) {
+//     // populate x,y,z with point coordinates
+//     x = cloud->points[i].x;
+//     y = cloud->points[i].y;
+//     z = cloud->points[i].z;
+//     // find the voronoi cell that contains the point
+//     if (cell_idxs[i] != -1) {
+//       // set current min distance to maximum value
+//       double min_dist = std::numeric_limits<double>::max();
+//       // iterate over all the points in the cloud to find the nearest point
+//       for (int j = 0; j < cloud->size(); j++) {
+//         if (i != j && cell_idxs[j] == cell_idxs[i]) {
+//           // compute distance between the two points
+//           double dist = sqrt(pow(x - cloud->points[j].x, 2) +
+//                             pow(y - cloud->points[j].y, 2) +
+//                             pow(z - cloud->points[j].z, 2));
+//           // update min distance if necessary
+//           if (dist < min_dist) {
+//             min_dist = dist;
+//           }
+//         }
+//       }
+//       // update the sum of distances and the number of points per cell
+//       mean_dist_with_nearest[cell_idxs[i]] += min_dist;
+//       // update the number of points per cell
+//       tot_points_per_cell[cell_idxs[i]]++;
+//     }
+//   }
+  
+//   // divide the sum of distances by the number of points per cell
+//   for (int i = 0; i < mean_dist_with_nearest.size(); i++) {
+//     if (tot_points_per_cell[i] == 0) {
+//       continue;
+//     }
+//     mean_dist_with_nearest[i] /= tot_points_per_cell[i];
+//   }
+// }
+
 }  // namespace utils
 
 #endif
