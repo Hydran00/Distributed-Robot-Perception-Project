@@ -170,6 +170,7 @@ class VoronoiCalculator : public rclcpp::Node {
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     pcl::fromROSMsg(*msg, *cloud_);
   }
+  
   void pdfCoeffsCallback(
       const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
     for (size_t i = 0; i < msg->data.size(); i++) {
@@ -252,10 +253,13 @@ class VoronoiCalculator : public rclcpp::Node {
       utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_);
 
       for (int i = 0; i < mean_dist_with_nearest_.size(); i++) {
+
+        // std::cout << "Cell " << i << std::endl;
+        // std::cout << "\tCurrent distance" << ": " << mean_dist_with_nearest_[i] << std::endl;
+        // std::cout << "\t    New distance" << ": " << dists[i] / 0.01 << std::endl;
+
         mean_dist_with_nearest_[i] =
-            max(mean_dist_with_nearest_[i], dists[i] / 0.01);
-        // std::cout << "Mean distance for cell " << i << ": "
-        //           << mean_dist_with_nearest_[i] << std::endl;
+            std::max(mean_dist_with_nearest_[i], dists[i] / 0.01);
       }
 
       Eigen::Quaterniond quat(
@@ -303,8 +307,12 @@ class VoronoiCalculator : public rclcpp::Node {
 
       std::vector<double> multipliers;
       for(size_t i=0; i<faces_centers_.size(); i++){
+        // std::cout << "i: " << i << std::endl;
+        // std::cout << "\tpdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] << std::endl;
+        // std::cout << "\tmean_dist_with_nearest_[" << i << "]: " << mean_dist_with_nearest_[i] << std::endl;
         multipliers.push_back(ALPHA * pdf_coeffs_[i] + (1-ALPHA) * mean_dist_with_nearest_[i]);
       }
+      // std::cout << "--------------------------------" << std::endl;
       auto res = utils::integrateVectorValuedPdfOverPolyhedron(
           vertices, container_, container_pdf_, j, multipliers);
 
