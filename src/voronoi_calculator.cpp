@@ -1,10 +1,11 @@
-
+// standard headers
 #include <iostream>
-
+#include <string>
+// package headers
 #include "project/icosahedron.h"
 #include "project/utils.h"
 #include "voro++.hh"
-// ROS2
+// ROS2 headers
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -12,20 +13,15 @@
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
-// PCL ROS
+// PCL ROS headers
 #include <pcl/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
-
-// tf2
+// tf2 headers
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-
-#include <string>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-
 #include "tf2/convert.h"
 
-using namespace std;
 using namespace voro;
 using namespace std::chrono_literals;
 
@@ -487,7 +483,7 @@ class VoronoiCalculator : public rclcpp::Node {
   const double zero_vel_threshold_ = 0.001;
 
   const double sphere_radius_ = 0.7;
-  const double ALPHA = 0.5;
+  const double ALPHA = 0.0;
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
   const double con_size_ymin = -2.0, con_size_ymax = 2.0;
