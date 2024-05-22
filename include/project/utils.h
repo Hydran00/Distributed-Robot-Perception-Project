@@ -318,7 +318,8 @@ void publishMarker(
     // const std::vector<Eigen::Vector3d> &face_normals,
     // const Eigen::Vector3d &current_rot_vec,
     std::map<int, std::vector<Eigen::Vector3d>> &faces_vertices,
-    const std::vector<double> &pdf_coeffs, const std::string &prefix_1,
+    const std::vector<double> &pdf_coeffs, 
+    const std::string &prefix_1,
     const std::string &frame_id,
     visualization_msgs::msg::MarkerArray &marker_array,
     const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
@@ -366,8 +367,18 @@ void publishMarker(
   std::vector<visualization_msgs::msg::Marker> texts;
   std::vector<visualization_msgs::msg::Marker> arrows;
   // generate colormap
-  std::vector<double> coloredArray =
-      generateColormap((int)pdf_coeffs.size(), pdf_coeffs);
+  std::vector<double> coloredArray;// =
+      // generateColormap((int)pdf_coeffs.size(), pdf_coeffs);
+  
+  for (double value : pdf_coeffs) {
+    coloredArray.push_back(1 - value);
+  }
+
+  // DEBUG
+  // for (int i=0; i<coloredArray.size(); i++) {
+  //   std::cout << "\t\t" << coloredArray[i] << std::endl;
+  // }
+  // std::cout << std::endl;
 
   geometry_msgs::msg::Point p;
   geometry_msgs::msg::Point normal;
@@ -455,7 +466,7 @@ std::vector<std::pair<double, int>> getTopKWithIndices(
 
 void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
                                     std::shared_ptr<voro::container> container,
-                                    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
+                                    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, bool debug_print) {
   // variables initialization
   double x, y, z, rx, ry, rz;
   int cell_idx;
@@ -504,7 +515,27 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
       continue;
     }
     mean_dist_with_nearest[i] /= tot_points_per_cell[i];
+
+    // set lower bound to distance
+    if (mean_dist_with_nearest[i] < 0.01) {
+      mean_dist_with_nearest[i] = 0.01;
+    }
+    // regularize distance
+    mean_dist_with_nearest[i] -= 0.01;
+    mean_dist_with_nearest[i] /= 10;
+
+    // DEBUG
+    if (debug_print) {
+      std::cout << "Cell " << i << ": " << mean_dist_with_nearest[i]/0.01 << std::endl;
+    }
+
   }
+
+  // DEBUG
+  if (debug_print) {
+    std::cout << std::endl;
+  }
+
 }
 
 // void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
