@@ -548,7 +548,6 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
   if (debug_print) {
     std::cout << std::endl;
   }
-  std::cout << absolute_min_dist/0.01 << std::endl;
 
 }
 
