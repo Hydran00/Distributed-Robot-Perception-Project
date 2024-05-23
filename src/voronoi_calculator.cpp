@@ -131,6 +131,11 @@ class VoronoiCalculator : public rclcpp::Node {
     RCLCPP_INFO(this->get_logger(), "base_frame: %s", base_frame_.c_str());
     RCLCPP_INFO(this->get_logger(), "target_topic: %s", target_topic_.c_str());
 
+    // DEBUG
+    for (int i=0; i<20; i++) {
+      prev_multipliers.push_back(0);
+    }
+
     utils::initIcosahedronPlanes(planes_, 2.0);
     for (auto plane : planes_) {
       container_->add_wall(*plane);
@@ -249,7 +254,15 @@ class VoronoiCalculator : public rclcpp::Node {
       }
 
       std::vector<double> dists(faces_vertices_.size(), 1.0);
-      utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_);
+      if (debug_acc == DEBUG_PRINT_VALUE) {
+        // utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_, true);
+        utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_, true);
+        // utils::computeSphereDensity(dists, container_pdf_, cloud_, true);
+      } else {
+        // utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_, false);
+        utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_, false);
+        // utils::computeSphereDensity(dists, container_pdf_, cloud_, false);
+      }
 
       for (int i = 0; i < mean_dist_with_nearest_.size(); i++) {
 
@@ -260,7 +273,7 @@ class VoronoiCalculator : public rclcpp::Node {
         // }
 
         mean_dist_with_nearest_[i] =
-            std::min(mean_dist_with_nearest_[i], dists[i] / 0.01);
+            std::min(mean_dist_with_nearest_[i], dists[i]);
       }
 
       Eigen::Quaterniond quat(
@@ -314,15 +327,51 @@ class VoronoiCalculator : public rclcpp::Node {
         // }
         multipliers.push_back(ALPHA * (1-pdf_coeffs_[i]) + (1-ALPHA) * mean_dist_with_nearest_[i]);
       }
-      // if (debug_) {
-      //   std::cout << "--------------------------------" << std::endl;
-      // }
+
+
+
+      // DEBUG
+      // ============================================================================================================
+      ++debug_acc;
+      if (debug_acc>DEBUG_PRINT_VALUE) {
+        if (debug_) {
+          for (size_t i = 0; i < multipliers.size(); i++) {
+            // std::cout << "multipliers[" << i << "]: " << multipliers[i] - prev_multipliers[i] << std::endl;
+            std::cout << "multipliers[" << i << "]: " << multipliers[i] << std::endl;
+          }
+        std::cout << "--------------------------------" << std::endl;
+        }
+
+        // termination condition
+        bool cond_1 = true;
+        bool cond_2 = true;
+        for (size_t i=0; i < multipliers.size(); i++) {
+          if (multipliers[i] > 0.1) {
+            cond_1 = false;
+          }
+          if (std::abs(multipliers[i] - prev_multipliers[i]) > 0.001) {
+            cond_2 = false;
+          }
+        }
+        if (cond_1 && cond_2) {
+          std::cout << "\n\n\n" << "TERMINATION CONDITION MET\n\n" << std::endl; 
+          exit(0);
+        }
+
+        prev_multipliers = multipliers;
+        debug_acc = 0;
+      }
+      // ============================================================================================================
+
+
+
       auto res = utils::integrateVectorValuedPdfOverPolyhedron(
           vertices, container_, container_pdf_, j, multipliers);
 
       // if (debug_) {
       //   std::cout << "Integral Result: " << res.transpose() << std::endl;
       // }
+
       // project onto sphere surface
       res = utils::projectOnSphere(res, sphere_radius_);
 
@@ -484,6 +533,11 @@ class VoronoiCalculator : public rclcpp::Node {
 
   const double sphere_radius_ = 0.7;
   const double ALPHA = 0.0;
+  // DEBUG
+  int debug_acc = 0;
+  std::vector<double> prev_multipliers;
+  const int DEBUG_PRINT_VALUE = 100;
+
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
   const double con_size_ymin = -2.0, con_size_ymax = 2.0;
