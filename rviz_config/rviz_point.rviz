@@ -9,7 +9,6 @@ Panels:
         - /TF1/Frames1
         - /Pose1
         - /Pose2
-        - /PoseArray1
         - /PointCloud21
       Splitter Ratio: 0.3382352888584137
     Tree Height: 1140
@@ -110,7 +109,7 @@ Visualization Manager:
       Axes Radius: 0.029999999329447746
       Class: rviz_default_plugins/PoseArray
       Color: 255; 25; 0
-      Enabled: true
+      Enabled: false
       Head Length: 0.07000000029802322
       Head Radius: 0.029999999329447746
       Name: PoseArray
@@ -124,9 +123,9 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /voronoi_vertices1_
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
+      Enabled: false
       Name: MarkerArray
       Namespaces:
         {}
@@ -136,7 +135,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /markers1_
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
