@@ -464,13 +464,21 @@ std::vector<std::pair<double, int>> getTopKWithIndices(
   return topkWithIndices;
 }
 
+// ===================================================================================
+// |                              METRICS                                            |
+// ===================================================================================
+
+// nn version
 void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
                                     std::shared_ptr<voro::container> container,
-                                    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, bool debug_print) {
+                                    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
+                                    bool debug_print) 
+{
   // variables initialization
   double x, y, z, rx, ry, rz;
   int cell_idx;
   std::vector<int> tot_points_per_cell;
+  double absolute_min_dist = std::numeric_limits<double>::max();
 
   // set the current number of points per cell to 0
   for (int i = 0; i < container->total_particles(); i++) {
@@ -500,6 +508,9 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
         // update min distance if necessary
         if (dist < min_dist) {
           min_dist = dist;
+          if (min_dist < absolute_min_dist) {
+            absolute_min_dist = min_dist;
+          }
         }
       }
       // update the sum of distances and the number of points per cell
@@ -516,13 +527,13 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
     }
     mean_dist_with_nearest[i] /= tot_points_per_cell[i];
 
-    // set lower bound to distance
-    if (mean_dist_with_nearest[i] < 0.01) {
-      mean_dist_with_nearest[i] = 0.01;
-    }
-    // regularize distance
-    mean_dist_with_nearest[i] -= 0.01;
-    mean_dist_with_nearest[i] /= 10;
+    // // set lower bound to distance
+    // if (mean_dist_with_nearest[i] < 0.01) {
+    //   mean_dist_with_nearest[i] = 0.01;
+    // }
+    // // regularize distance
+    // mean_dist_with_nearest[i] -= 0.01;
+    // mean_dist_with_nearest[i] /= 10;
 
     // DEBUG
     if (debug_print) {
@@ -535,75 +546,153 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
   if (debug_print) {
     std::cout << std::endl;
   }
+  std::cout << absolute_min_dist/0.01 << std::endl;
 
 }
 
-// void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
-//                                     std::shared_ptr<voro::container> container,
-//                                     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
-//   // variables initialization
-//   double x, y, z, rx, ry, rz;
-//   int cell_idx;
-//   std::vector<int> tot_points_per_cell;
-//   std::vector<int> cell_idxs;
+// knn version
+void computeMeanDistancesWithNearest(std::vector<double> &mean_dist_with_nearest,
+                                     std::shared_ptr<voro::container> container,
+                                     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
+                                     bool debug_print) 
+{
+  // variables initialization
+  double x, y, z, rx, ry, rz;
+  int cell_idx;
+  std::vector<int> tot_points_per_cell;
+  // number of nearest neighbors to consider
+  const int K = 5;
 
-//   // set the current number of points per cell to 0
-//   for (int i = 0; i < container->total_particles(); i++) {
-//     tot_points_per_cell.push_back(0);
-//   }
+  // set the current number of points per cell to 0
+  for (int i = 0; i < container->total_particles(); i++) {
+    tot_points_per_cell.push_back(0);
+  }
 
-//   // for each point of the point-cloud find the cell it belongs to
-//   for (int i = 0; i < cloud->size(); i++) {
-//     // populate x,y,z with point coordinates
-//     x = cloud->points[i].x;
-//     y = cloud->points[i].y;
-//     z = cloud->points[i].z;
-//     // find the voronoi cell that contains the point
-//     if (container->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
-//       cell_idxs.push_back(cell_idx);
-//     } else {
-//       cell_idxs.push_back(-1);
-//     }
-//   }
-
-//   // first iteration to compute the mean distance with the nearest point
-//   for (int i = 0; i < cloud->size(); i++) {
-//     // populate x,y,z with point coordinates
-//     x = cloud->points[i].x;
-//     y = cloud->points[i].y;
-//     z = cloud->points[i].z;
-//     // find the voronoi cell that contains the point
-//     if (cell_idxs[i] != -1) {
-//       // set current min distance to maximum value
-//       double min_dist = std::numeric_limits<double>::max();
-//       // iterate over all the points in the cloud to find the nearest point
-//       for (int j = 0; j < cloud->size(); j++) {
-//         if (i != j && cell_idxs[j] == cell_idxs[i]) {
-//           // compute distance between the two points
-//           double dist = sqrt(pow(x - cloud->points[j].x, 2) +
-//                             pow(y - cloud->points[j].y, 2) +
-//                             pow(z - cloud->points[j].z, 2));
-//           // update min distance if necessary
-//           if (dist < min_dist) {
-//             min_dist = dist;
-//           }
-//         }
-//       }
-//       // update the sum of distances and the number of points per cell
-//       mean_dist_with_nearest[cell_idxs[i]] += min_dist;
-//       // update the number of points per cell
-//       tot_points_per_cell[cell_idxs[i]]++;
-//     }
-//   }
+  // first iteration to compute the mean distance with the nearest point
+  for (int i = 0; i < cloud->size(); i++) {
+    // populate x,y,z with point coordinates
+    x = cloud->points[i].x;
+    y = cloud->points[i].y;
+    z = cloud->points[i].z;
+    // find the voronoi cell that contains the point
+    if (container->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
+      // create a min_dists vector containing the nearest neighbors
+      std::vector<double> min_dists;
+      for (int k = 0; k > K; k++) {
+        min_dists.push_back(std::numeric_limits<double>::max());
+      }
+      // iterate over all the points in the cloud to find the nearest point
+      for (int j = 0; j < cloud->size(); j++) {
+        // do not consider the same point
+        if (i == j) {
+          continue;
+        }
+        // compute distance between the two points
+        double dist = sqrt(pow(x - cloud->points[j].x, 2) +
+                           pow(y - cloud->points[j].y, 2) +
+                           pow(z - cloud->points[j].z, 2));
+        // update min distances if necessary
+        for (int k = 0; k > K; k++) {
+          if (dist < min_dists[k]) {
+            for (int k2 = K-1; k2 < k; k2--) {
+              min_dists[k2] = min_dists[k2-1];
+            }
+            min_dists[k] = dist;
+            k = K;
+          }
+        }
+        if (dist < radius) {
+          point_density[i]++;
+        }
+      }
+      // compute the mean distance between the k nearest neighbors
+      double mean_dist = std::accumulate(min_dists.begin(), min_dists.end(), 0.0) / K;
+      // update the sum of distances and the number of points per cell
+      mean_dist_with_nearest[cell_idx] += mean_dist;
+      // update the number of points per cell
+      tot_points_per_cell[cell_idx]++;
+    }
+  }
   
-//   // divide the sum of distances by the number of points per cell
-//   for (int i = 0; i < mean_dist_with_nearest.size(); i++) {
-//     if (tot_points_per_cell[i] == 0) {
-//       continue;
-//     }
-//     mean_dist_with_nearest[i] /= tot_points_per_cell[i];
-//   }
-// }
+  // divide the sum of distances by the number of points per cell
+  for (int i = 0; i < mean_dist_with_nearest.size(); i++) {
+    if (tot_points_per_cell[i] == 0) {
+      continue;
+    }
+    mean_dist_with_nearest[i] /= tot_points_per_cell[i];
+
+    // // set lower bound to distance
+    // if (mean_dist_with_nearest[i] < 0.01) {
+    //   mean_dist_with_nearest[i] = 0.01;
+    // }
+    // // regularize distance
+    // mean_dist_with_nearest[i] -= 0.01;
+    // mean_dist_with_nearest[i] /= 10;
+
+    // DEBUG
+    if (debug_print) {
+      std::cout << "Cell " << i << ": " << mean_dist_with_nearest[i]/0.01 << std::endl;
+    }
+
+  }
+
+  // DEBUG
+  if (debug_print) {
+    std::cout << std::endl;
+  }
+}
+
+// sphere version
+void computeSphereDensity(std::vector<double> &mean_dist_with_nearest,
+                          std::shared_ptr<voro::container> container,
+                          pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
+                          bool debug_print) 
+{
+  // variables initialization
+  double x, y, z, rx, ry, rz;
+  int cell_idx;
+  std::vector<int> point_density;
+  const double radius = 0.1;
+
+  // first iteration to compute the mean distance with the nearest point
+  for (int i = 0; i < cloud->size(); i++) {
+    point_density.push_back(0);
+    // populate x,y,z with point coordinates
+    x = cloud->points[i].x;
+    y = cloud->points[i].y;
+    z = cloud->points[i].z;
+    // find the voronoi cell that contains the point
+    if (container->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
+      // set current min distance to maximum value
+      for (int j = 0; j < cloud->size(); j++) {
+        // do not consider the same point
+        if (i == j) {
+          continue;
+        }
+        // compute distance between the two points
+        double dist = sqrt(pow(x - cloud->points[j].x, 2) +
+                           pow(y - cloud->points[j].y, 2) +
+                           pow(z - cloud->points[j].z, 2));
+        if (dist < radius) {
+          point_density[i]++;
+        }
+      }
+    }
+  }
+  
+  // divide the sum of distances by the number of points per cell
+  for (int i = 0; i < mean_dist_with_nearest.size(); i++) {
+    // DEBUG
+    if (debug_print) {
+      std::cout << "Cell " << i << ": " << point_density[i] << std::endl;
+    }
+  }
+
+  // DEBUG
+  if (debug_print) {
+    std::cout << std::endl;
+  }
+}
 
 }  // namespace utils
 
