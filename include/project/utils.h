@@ -537,9 +537,15 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
     
     mean_dist_with_nearest[i] /= 0.01;
 
+    if (debug_print) {
+      std::cout << "Cell " << i << ": " << mean_dist_with_nearest[i];
+    }
+
+    mean_dist_with_nearest[i] = 0.3 * std::log(mean_dist_with_nearest[i] - 0.25) + 0.6;
+
     // DEBUG
     if (debug_print) {
-      std::cout << "Cell " << i << ": " << mean_dist_with_nearest[i] << std::endl;
+      std::cout << "  ->  " << mean_dist_with_nearest[i] << std::endl;
     }
 
   }
