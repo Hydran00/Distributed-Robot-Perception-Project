@@ -112,9 +112,8 @@ Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
             //   continue;
             // }
             pdf = multipliers[tmp_cell_idx] * test_pdf(x, y, z);
-            // pdf = (1 - multipliers[tmp_cell_idx]) * test_pdf(x, y, z);
-            // multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0),
-            //                           2.0 * Eigen::Matrix3d::Identity());
+                    // multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0),
+                    //                           Eigen::Matrix3d::Identity());
             mass += pdf;
             com += pdf * point;
           }

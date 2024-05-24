@@ -255,12 +255,12 @@ class VoronoiCalculator : public rclcpp::Node {
 
       std::vector<double> dists(faces_vertices_.size(), 1.0);
       if (debug_acc == DEBUG_PRINT_VALUE) {
-        utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_, true);
-        // utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_, true);
+        // utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_, true);
+        utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_, true);
         // utils::computeSphereDensity(dists, container_pdf_, cloud_, true);
       } else {
-        utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_, false);
-        // utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_, false);
+        // utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_, false);
+        utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_, false);
         // utils::computeSphereDensity(dists, container_pdf_, cloud_, false);
       }
 
