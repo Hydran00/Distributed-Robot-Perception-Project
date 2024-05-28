@@ -24,7 +24,7 @@ public:
       std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
     subscription_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-      "robot"+prefix_+"pose", 10,
+      "robot"+prefix_+"pose", 1,
       std::bind(&FramePublisher::publish, this, std::placeholders::_1));
   }
 
