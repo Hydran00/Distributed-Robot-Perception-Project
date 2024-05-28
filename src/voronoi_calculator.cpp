@@ -346,7 +346,7 @@ class VoronoiCalculator : public rclcpp::Node {
         bool cond_1 = true;
         bool cond_2 = true;
         for (size_t i=0; i < multipliers.size(); i++) {
-          if (multipliers[i] > 0.1) {
+          if (multipliers[i] > 0.175) {
             cond_1 = false;
           }
           if (std::abs(multipliers[i] - prev_multipliers[i]) > 0.001) {

@@ -97,6 +97,9 @@ class PointCloudAccumulator : public rclcpp::Node {
     RCLCPP_INFO(this->get_logger(), "max_cloud_size: %d", max_cloud_size_);
 
     RCLCPP_INFO(this->get_logger(), "PointCloudAccumulator has been started.");
+    RCLCPP_INFO(this->get_logger(),
+                "Use sim time is %s",
+                this->get_parameter("use_sim_time").as_bool() ? "true" : "false");
   }
 
  private:
@@ -125,6 +128,7 @@ class PointCloudAccumulator : public rclcpp::Node {
     // transform_available = getTransform(total_cloud_frame_,
     // msg->header.frame_id, msg->header.stamp, id);
     tf2::TimePoint stamp = tf2_ros::fromMsg(msg->header.stamp);
+    RCLCPP_INFO(this->get_logger(), "stamp: %d , %d", msg->header.stamp.sec, msg->header.stamp.nanosec);
     transform_available =
         getTransform(total_cloud_frame_, msg->header.frame_id, stamp, id);
 
