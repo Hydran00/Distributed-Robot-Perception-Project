@@ -17,28 +17,6 @@ def generate_launch_description():
         # suppress the output
         
     )
-    pointcloud_accumulator = Node(
-        package='project',
-        executable='pointcloud_accumulator',
-        output='screen',
-        parameters=[{"use_sim_time": True},
-                    {'voxel_grid_size': 0.01},
-                    {'input_topic_1': '/cloud_out_1'},
-                    {'input_topic_2': '/cloud_out_2'},
-                    {'output_topic': '/total_cloud'},
-                    {'frame_id': 'world'},
-                    ]
-    )
-    
-    rviz_config = os.path.join(get_package_share_directory('project'), 'rviz','robot.rviz')
-    rviz = Node(
-        package="rviz2",
-        executable="rviz2",
-        name="rviz2",
-        output="log",
-        arguments=["-d", rviz_config],
-        parameters=[{"use_sim_time": True}]
-    )
     voronoi_calculator_1 = Node(
         package='project',
         executable='voronoi_calculator',
@@ -86,8 +64,6 @@ def generate_launch_description():
             )
 
     node_list = [
-        # pointcloud_accumulator,
-        # rviz
         voronoi_calculator_1,
         voronoi_calculator_2,
         

@@ -169,7 +169,9 @@ class VoronoiCalculator : public rclcpp::Node {
 
  private:
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+    std::cout << "Received point cloud" << std::endl;
     pcl::fromROSMsg(*msg, *cloud_);
+
   }
   
   void pdfCoeffsCallback(
@@ -188,7 +190,13 @@ class VoronoiCalculator : public rclcpp::Node {
   }
 
   void updateVoronoi() {
+    std::cout <<"Updating voronoi" << std::endl;
+    if (first_iteration_) {
+      start_time_ = this->now();
+      first_iteration_ = false;
+    }
     if (cloud_->size() == 0) {
+      std::cout << "No point cloud received" << std::endl;
       return;
     }
 
@@ -342,25 +350,32 @@ class VoronoiCalculator : public rclcpp::Node {
         std::cout << "--------------------------------" << std::endl;
         }
 
-        // termination condition
-        bool cond_1 = true;
-        bool cond_2 = true;
-        for (size_t i=0; i < multipliers.size(); i++) {
-          if (multipliers[i] > 0.175) {
-            cond_1 = false;
-          }
-          if (std::abs(multipliers[i] - prev_multipliers[i]) > 0.001) {
-            cond_2 = false;
-          }
-        }
-        if (cond_1 && cond_2) {
-          std::cout << "\n\n\n" << "TERMINATION CONDITION MET\n\n" << std::endl; 
-          exit(0);
-        }
+        // // termination condition
+        // bool cond_1 = true;
+        // bool cond_2 = true;
+        // for (size_t i=0; i < multipliers.size(); i++) {
+        //   if (multipliers[i] > 0.175) {
+        //     cond_1 = false;
+        //   }
+        //   if (std::abs(multipliers[i] - prev_multipliers[i]) > 0.001) {
+        //     cond_2 = false;
+        //   }
+        // }
+        // if (cond_1 && cond_2) {
+        //   std::cout << "\n\n\n" << "TERMINATION CONDITION MET\n\n" << std::endl; 
+        //   exit(0);
+        // }
 
         prev_multipliers = multipliers;
         debug_acc = 0;
       }
+
+      // std::cout << "Difference: " << (this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 << "\n" << std::endl;
+      if ((this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 > 60) {
+        std::cout << "\n\n\n" << "TERMINATION CONDITION MET\n\n" << std::endl; 
+        exit(0);
+      }
+
       // ============================================================================================================
 
 
@@ -533,10 +548,12 @@ class VoronoiCalculator : public rclcpp::Node {
 
   const double sphere_radius_ = 0.7;
   const double ALPHA = 0.0;
+  rclcpp::Time start_time_;
+  bool first_iteration_ = true;
   // DEBUG
   int debug_acc = 0;
   std::vector<double> prev_multipliers;
-  const int DEBUG_PRINT_VALUE = 100;
+  const int DEBUG_PRINT_VALUE = 1000;
 
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;

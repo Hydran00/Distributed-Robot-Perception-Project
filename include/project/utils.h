@@ -483,7 +483,6 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
   for (int i = 0; i < container->total_particles(); i++) {
     tot_points_per_cell.push_back(0);
   }
-
   // first iteration to compute the mean distance with the nearest point
   for (int i = 0; i < cloud->size(); i++) {
     // populate x,y,z with point coordinates
@@ -573,6 +572,7 @@ void computeMeanDistancesWithNearest(std::vector<double> &mean_dist_with_nearest
   for (int i = 0; i < container->total_particles(); i++) {
     tot_points_per_cell.push_back(0);
   }
+  std::cout << "A"<< std::endl;
 
   // first iteration to compute the mean distance with the nearest point
   for (int i = 0; i < cloud->size(); i++) {
@@ -643,6 +643,7 @@ void computeMeanDistancesWithNearest(std::vector<double> &mean_dist_with_nearest
     // if (debug_print) {
     //   std::cout << "  ->  " << mean_dist_with_nearest[i] << std::endl;
     // }
+  std::cout << "B"<< std::endl;
 
   }
 

@@ -50,7 +50,7 @@ def generate_launch_description():
         executable='pointcloud_accumulator',
         output='screen',
         parameters=[{"use_sim_time": True},
-                    {'voxel_grid_size': 0.01},
+                    {'voxel_grid_size': 0.001},
                     {'max_cloud_size': 50000},
                     {'input_topic_1': '/cloud_out_1'},
                     {'input_topic_2': '/cloud_out_2'},
