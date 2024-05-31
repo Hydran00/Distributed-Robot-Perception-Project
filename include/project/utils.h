@@ -4,6 +4,8 @@
 
 #include <math.h>
 #include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/search/kdtree.h>
 #include <pcl_conversions/pcl_conversions.h>
 
 #include <Eigen/Dense>
@@ -112,8 +114,8 @@ Eigen::Vector3d integrateVectorValuedPdfOverPolyhedron(
             //   continue;
             // }
             pdf = multipliers[tmp_cell_idx] * test_pdf(x, y, z);
-                    // multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0),
-                    //                           Eigen::Matrix3d::Identity());
+            // multivariate_gaussian_pdf(point, Eigen::Vector3d(0, 0, 0),
+            //                           Eigen::Matrix3d::Identity());
             mass += pdf;
             com += pdf * point;
           }
@@ -317,8 +319,7 @@ void publishMarker(
     // const std::vector<Eigen::Vector3d> &face_normals,
     // const Eigen::Vector3d &current_rot_vec,
     std::map<int, std::vector<Eigen::Vector3d>> &faces_vertices,
-    const std::vector<double> &pdf_coeffs, 
-    const std::string &prefix_1,
+    const std::vector<double> &pdf_coeffs, const std::string &prefix_1,
     const std::string &frame_id,
     visualization_msgs::msg::MarkerArray &marker_array,
     const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
@@ -366,9 +367,10 @@ void publishMarker(
   std::vector<visualization_msgs::msg::Marker> texts;
   std::vector<visualization_msgs::msg::Marker> arrows;
   // generate colormap
-  std::vector<double> coloredArray;// =
-      // generateColormap((int)pdf_coeffs.size(), pdf_coeffs);
-  
+  std::vector<double>
+      coloredArray;  // =
+                     // generateColormap((int)pdf_coeffs.size(), pdf_coeffs);
+
   for (double value : pdf_coeffs) {
     coloredArray.push_back(1 - value);
   }
@@ -464,15 +466,14 @@ std::vector<std::pair<double, int>> getTopKWithIndices(
 }
 
 // ===================================================================================
-// |                              METRICS                                            |
+// |                              METRICS |
 // ===================================================================================
 
 // ==================== nn version ====================
 void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
                                     std::shared_ptr<voro::container> container,
-                                    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
-                                    bool debug_print) 
-{
+                                    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
+                                    bool debug_print) {
   // variables initialization
   double x, y, z, rx, ry, rz;
   int cell_idx;
@@ -517,7 +518,7 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
       tot_points_per_cell[cell_idx]++;
     }
   }
-  
+
   // divide the sum of distances by the number of points per cell
   for (int i = 0; i < mean_dist_with_nearest.size(); i++) {
     if (tot_points_per_cell[i] == 0) {
@@ -532,35 +533,33 @@ void computeMeanDistanceWithNearest(std::vector<double> &mean_dist_with_nearest,
     // // regularize distance
     // mean_dist_with_nearest[i] -= 0.01;
     // mean_dist_with_nearest[i] /= 10;
-    
+
     mean_dist_with_nearest[i] /= 0.01;
 
     if (debug_print) {
       std::cout << "Cell " << i << ": " << mean_dist_with_nearest[i];
     }
 
-    mean_dist_with_nearest[i] = 0.3 * std::log(mean_dist_with_nearest[i] - 0.25) + 0.6;
+    mean_dist_with_nearest[i] =
+        0.3 * std::log(mean_dist_with_nearest[i] - 0.25) + 0.6;
 
     // DEBUG
     if (debug_print) {
       std::cout << "  ->  " << mean_dist_with_nearest[i] << std::endl;
     }
-
   }
 
   // DEBUG
   if (debug_print) {
     std::cout << std::endl;
   }
-
 }
 
 // ==================== knn version ====================
-void computeMeanDistancesWithNearest(std::vector<double> &mean_dist_with_nearest,
-                                     std::shared_ptr<voro::container> container,
-                                     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
-                                     bool debug_print) 
-{
+void computeMeanDistancesWithNearest(
+    std::vector<double> &mean_dist_with_nearest,
+    std::shared_ptr<voro::container> container,
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, bool debug_print) {
   // variables initialization
   double x, y, z, rx, ry, rz;
   int cell_idx;
@@ -572,93 +571,63 @@ void computeMeanDistancesWithNearest(std::vector<double> &mean_dist_with_nearest
   for (int i = 0; i < container->total_particles(); i++) {
     tot_points_per_cell.push_back(0);
   }
-  std::cout << "A"<< std::endl;
+  // Create a KdTree
+  pcl::search::KdTree<pcl::PointXYZ> kdtree;
+  kdtree.setInputCloud(cloud);
 
   // first iteration to compute the mean distance with the nearest point
   for (int i = 0; i < cloud->size(); i++) {
-    // populate x,y,z with point coordinates
+    // populate x, y, z with point coordinates
     x = cloud->points[i].x;
     y = cloud->points[i].y;
     z = cloud->points[i].z;
     // find the voronoi cell that contains the point
     if (container->find_voronoi_cell(x, y, z, rx, ry, rz, cell_idx)) {
-      // create a min_dists vector containing the nearest neighbors
-      std::vector<double> min_dists;
-      for (int k = 0; k < K; k++) {
-        min_dists.push_back(std::numeric_limits<double>::max());
-      }
-      // iterate over all the points in the cloud to find the nearest point
-      for (int j = 0; j < cloud->size(); j++) {
-        // do not consider the same point
-        if (i == j) {
-          continue;
-        }
-        // compute distance between the two points
-        double dist = sqrt(pow(x - cloud->points[j].x, 2) +
-                           pow(y - cloud->points[j].y, 2) +
-                           pow(z - cloud->points[j].z, 2));
-        // update min distances if necessary
+      // create a vector to store the indices of the nearest neighbors
+      std::vector<int> pointIdxNKNSearch(K);
+      // create a vector to store the squared distances to the nearest neighbors
+      std::vector<float> pointNKNSquaredDistance(K);
+
+      // perform K nearest neighbor search
+      if (kdtree.nearestKSearch(cloud->points[i], K, pointIdxNKNSearch,
+                                pointNKNSquaredDistance) > 0) {
+        // create a vector to store the distances
+        std::vector<double> min_dists(K);
         for (int k = 0; k < K; k++) {
-          if (dist < min_dists[k]) {
-            for (int k2 = K-1; k2 < k; k2--) {
-              min_dists[k2] = min_dists[k2-1];
-            }
-            min_dists[k] = dist;
-            k = K;
-          }
+          min_dists[k] = std::sqrt(pointNKNSquaredDistance[k]);
         }
+
+        // compute the mean distance between the k nearest neighbors
+        double mean_dist =
+            std::accumulate(min_dists.begin(), min_dists.end(), 0.0) / K;
+        // update the sum of distances and the number of points per cell
+        mean_dist_with_nearest[cell_idx] += mean_dist;
+        // update the number of points per cell
+        tot_points_per_cell[cell_idx]++;
       }
-      // if (debug_print) {
-      //   std::cout << "md: = [ ";
-      //   for (int idx=0; idx<K; idx++) {
-      //     std::cout << min_dists[idx] << " ";
-      //   }
-      //   std::cout << "]" << std::endl;
-      // }
-      // compute the mean distance between the k nearest neighbors
-      double mean_dist = std::accumulate(min_dists.begin(), min_dists.end(), 0.0) / K;
-      // update the sum of distances and the number of points per cell
-      mean_dist_with_nearest[cell_idx] += mean_dist;
-      // update the number of points per cell
-      tot_points_per_cell[cell_idx]++;
     }
   }
-  
+
   // divide the sum of distances by the number of points per cell
   for (int i = 0; i < mean_dist_with_nearest.size(); i++) {
     if (tot_points_per_cell[i] == 0) {
       continue;
     }
     mean_dist_with_nearest[i] /= tot_points_per_cell[i];
+    // mean_dist_with_nearest[i] = 0.3 *
+    // std::log((mean_dist_wth_nearest[i]*10.0) - 0.04) + 0.85;
 
-    // // DEBUG
-    // if (debug_print) {
-    //   std::cout << "Cell " << i << ": " << mean_dist_with_nearest[i];
-    // }
-
-    // mean_dist_with_nearest[i] = 1.1 * std::log((mean_dist_with_nearest[i]*10.0)+(9.0/10.0));
-    mean_dist_with_nearest[i] = 0.3 * std::log((mean_dist_with_nearest[i]*10.0) - 0.04) + 0.85;
-
-    // // DEBUG
-    // if (debug_print) {
-    //   std::cout << "  ->  " << mean_dist_with_nearest[i] << std::endl;
-    // }
-  std::cout << "B"<< std::endl;
-
+    // compute the exponential activation function
+    mean_dist_with_nearest[i] =
+        1 / (-std::exp(25 * mean_dist_with_nearest[i])) + 1;
   }
-
-  // // DEBUG
-  // if (debug_print) {
-  //   std::cout << std::endl;
-  // }
 }
 
 // ==================== sphere version ====================
 void computeSphereDensity(std::vector<double> &mean_dist_with_nearest,
                           std::shared_ptr<voro::container> container,
-                          pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
-                          bool debug_print) 
-{
+                          pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
+                          bool debug_print) {
   // variables initialization
   double x, y, z, rx, ry, rz;
   int cell_idx;
@@ -690,7 +659,7 @@ void computeSphereDensity(std::vector<double> &mean_dist_with_nearest,
       }
     }
   }
-  
+
   // divide the sum of distances by the number of points per cell
   for (int i = 0; i < mean_dist_with_nearest.size(); i++) {
     // DEBUG

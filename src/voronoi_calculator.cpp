@@ -169,7 +169,6 @@ class VoronoiCalculator : public rclcpp::Node {
 
  private:
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-    std::cout << "Received point cloud" << std::endl;
     pcl::fromROSMsg(*msg, *cloud_);
 
   }
@@ -190,13 +189,11 @@ class VoronoiCalculator : public rclcpp::Node {
   }
 
   void updateVoronoi() {
-    std::cout <<"Updating voronoi" << std::endl;
     if (first_iteration_) {
       start_time_ = this->now();
       first_iteration_ = false;
     }
     if (cloud_->size() == 0) {
-      std::cout << "No point cloud received" << std::endl;
       return;
     }
 
@@ -553,7 +550,7 @@ class VoronoiCalculator : public rclcpp::Node {
   // DEBUG
   int debug_acc = 0;
   std::vector<double> prev_multipliers;
-  const int DEBUG_PRINT_VALUE = 1000;
+  const int DEBUG_PRINT_VALUE = 50;
 
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
