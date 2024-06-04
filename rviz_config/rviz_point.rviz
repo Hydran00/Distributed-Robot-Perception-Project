@@ -158,8 +158,8 @@ Visualization Manager:
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.003000000026077032
-      Style: Flat Squares
+      Size (m): 0.0010000000474974513
+      Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -186,7 +186,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 4.729213714599609
+      Distance: 3.188891887664795
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
