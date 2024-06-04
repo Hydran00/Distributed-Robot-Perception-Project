@@ -619,7 +619,7 @@ void computeMeanDistancesWithNearest(
 
     // compute the exponential activation function
     mean_dist_with_nearest[i] =
-        1 / (-std::exp(25 * mean_dist_with_nearest[i])) + 1;
+        1.0 / (-std::exp(25.0 * mean_dist_with_nearest[i])) + 1.0;
   }
 }
 
