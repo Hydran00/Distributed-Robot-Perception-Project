@@ -7,7 +7,7 @@ from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 import os,time
-
+sim_time = False
 def generate_launch_description():
     # include the launch file for point clouds
     simulation = IncludeLaunchDescription(
@@ -23,7 +23,7 @@ def generate_launch_description():
         name='voronoi_calculator_1',
         output='screen',
         # prefix=['xterm -e gdb -ex run --args'],
-        parameters=[{"use_sim_time": True},
+        parameters=[{"use_sim_time": sim_time},
         {"debug": True},
         {"prefix_1": "1_"},
         {"prefix_2": "2_"},
@@ -40,7 +40,7 @@ def generate_launch_description():
         executable='voronoi_calculator',
         output='screen',
         name='voronoi_calculator_2',
-        parameters=[{"use_sim_time": True},
+        parameters=[{"use_sim_time": sim_time},
         {"debug": False},
         {"prefix_1": "2_"},
         {"prefix_2": "1_"},
@@ -56,7 +56,7 @@ def generate_launch_description():
         package='project',
         executable='integrator',
         output='screen',
-        parameters=[{"use_sim_time": True},
+        parameters=[{"use_sim_time": sim_time},
             ]
     )
     integrator_t = TimerAction(period=2.0,

@@ -10,6 +10,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 import os
 
 PREFIX_LIST = ['1_', '2_']
+sim_time = True
 
 def generate_launch_description():
     # suppress the output
@@ -18,7 +19,7 @@ def generate_launch_description():
         package='project',
         executable='tf_publisher',
         output='screen',
-        parameters=[{"use_sim_time": True},
+        parameters=[{"use_sim_time": sim_time},
                     {'prefix': PREFIX_LIST[0]}]                  
     )    
     tf_pub2 = Node(
@@ -26,7 +27,7 @@ def generate_launch_description():
         package='project',
         executable='tf_publisher',
         output='screen',
-        parameters=[{"use_sim_time": True},
+        parameters=[{"use_sim_time": sim_time},
                     {'prefix': PREFIX_LIST[1]}]          
     )
 
@@ -34,14 +35,14 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         arguments=['0', '0', '0', '0', '0', '0', '1_base_link', '1_camera'],
-        parameters=[{"use_sim_time": True}],
+        parameters=[{"use_sim_time": sim_time}],
         output='screen',
     )
     static_trans_broadcaster2 = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         arguments=['0', '0', '0', '0', '0', '0', '2_base_link', '2_camera'],
-        parameters=[{"use_sim_time": True}],
+        parameters=[{"use_sim_time": sim_time}],
         output='screen',
     )
     
@@ -49,7 +50,7 @@ def generate_launch_description():
         package='project',
         executable='pointcloud_accumulator',
         output='screen',
-        parameters=[{"use_sim_time": True},
+        parameters=[{"use_sim_time": sim_time},
                     {'voxel_grid_size': 0.003},
                     {'max_cloud_size': 50000},
                     {'input_topic_1': '/cloud_out_1'},
@@ -66,7 +67,7 @@ def generate_launch_description():
         name="rviz2",
         output="log",
         arguments=["-d", rviz_config],
-        parameters=[{"use_sim_time": True}]
+        parameters=[{"use_sim_time": sim_time}]
     )
 
         # include the launch file for point clouds

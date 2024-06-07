@@ -22,9 +22,6 @@ using namespace std::chrono_literals;
 class PointCloudAccumulator : public rclcpp::Node {
  public:
   PointCloudAccumulator() : Node("point_cloud_filter_node") {
-    // avoid storing the pointcloud if transform is not available
-    rclcpp::sleep_for(2s);
-
     // Initialize the filtered point cloud
     total_cloud_ = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(
         new pcl::PointCloud<pcl::PointXYZRGB>);

@@ -84,9 +84,6 @@ class VoronoiCalculator : public rclcpp::Node {
         con_size_xmin, con_size_xmax, con_size_ymin, con_size_ymax,
         con_size_zmin, con_size_zmax, 5, 5, 5, false, false, false, 8);
 
-    timer_ = this->create_wall_timer(
-        20ms, std::bind(&VoronoiCalculator::updateVoronoi, this));
-
     // publisher
     target_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
         target_topic_, 1);
@@ -163,7 +160,10 @@ class VoronoiCalculator : public rclcpp::Node {
     last_time_ = this->now();
     annealing_start_time_ = this->now();
     //sleep 1s
-    rclcpp::sleep_for(1s);
+
+    timer_ = this->create_wall_timer(
+        20ms, std::bind(&VoronoiCalculator::updateVoronoi, this));
+
     std::cout << "Node started correctly" << std::endl;
   }
 
@@ -367,8 +367,8 @@ class VoronoiCalculator : public rclcpp::Node {
         debug_acc = 0;
       }
 
-      // std::cout << "Difference: " << (this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 << "\n" << std::endl;
-      if ((this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 > 60) {
+      std::cout << "Difference: " << (this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 << "\n" << std::endl;
+      if ((this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 > termination_time) {
         std::cout << "\n\n\n" << "TERMINATION CONDITION MET\n\n" << std::endl; 
         exit(0);
       }
@@ -385,7 +385,7 @@ class VoronoiCalculator : public rclcpp::Node {
       // }
 
       // project onto sphere surface
-      res = utils::projectOnSphere(res, sphere_radius_);
+      // res = utils::projectOnSphere(res, sphere_radius_);
 
       pose_.header.stamp = this->now();
       pose_.header.frame_id = voronoi_frame_;
@@ -473,7 +473,7 @@ class VoronoiCalculator : public rclcpp::Node {
       // project onto sphere surface
       Eigen::Vector3d res(pose_.pose.position.x, pose_.pose.position.y,
                           pose_.pose.position.z);
-      res = utils::projectOnSphere(res, sphere_radius_);
+      // res = utils::projectOnSphere(res, sphere_radius_);
       pose_.pose.position.x = res(0);
       pose_.pose.position.y = res(1);
       pose_.pose.position.z = res(2);
@@ -547,10 +547,11 @@ class VoronoiCalculator : public rclcpp::Node {
   const double ALPHA = 0.0;
   rclcpp::Time start_time_;
   bool first_iteration_ = true;
+  const int termination_time = 60;
   // DEBUG
   int debug_acc = 0;
   std::vector<double> prev_multipliers;
-  const int DEBUG_PRINT_VALUE = 50;
+  const int DEBUG_PRINT_VALUE = 500;
 
   // voronoi
   const double con_size_xmin = -2.0, con_size_xmax = 2.0;
