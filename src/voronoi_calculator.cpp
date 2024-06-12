@@ -19,7 +19,9 @@
 // tf2 headers
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
 #include "tf2/convert.h"
 
 using namespace voro;
@@ -129,7 +131,7 @@ class VoronoiCalculator : public rclcpp::Node {
     RCLCPP_INFO(this->get_logger(), "target_topic: %s", target_topic_.c_str());
 
     // DEBUG
-    for (int i=0; i<20; i++) {
+    for (int i = 0; i < 20; i++) {
       prev_multipliers.push_back(0);
     }
 
@@ -159,7 +161,7 @@ class VoronoiCalculator : public rclcpp::Node {
     r1_trans_velocity_ = Eigen::Vector3d(0, 0, 0);
     last_time_ = this->now();
     annealing_start_time_ = this->now();
-    //sleep 1s
+    // sleep 1s
 
     timer_ = this->create_wall_timer(
         20ms, std::bind(&VoronoiCalculator::updateVoronoi, this));
@@ -170,16 +172,15 @@ class VoronoiCalculator : public rclcpp::Node {
  private:
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     pcl::fromROSMsg(*msg, *cloud_);
-
   }
-  
+
   void pdfCoeffsCallback(
       const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
     for (size_t i = 0; i < msg->data.size(); i++) {
       pdf_coeffs_[i] = std::max(msg->data[i], pdf_coeffs_[i]);
     }
   }
-  
+
   void meanMinDistCoeffsCallback(
       const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
     for (size_t i = 0; i < msg->data.size(); i++) {
@@ -238,7 +239,7 @@ class VoronoiCalculator : public rclcpp::Node {
 
       voro::c_loop_all cla(*container_);
       voro::voronoicell c;
-
+      FILE *f2 = safe_fopen("voro_cells.gnu", "w");
       if (cla.start()) do {
           if (container_->compute_cell(c, cla)) {
             cla.pos(current_cell_idx, x, y, z, rx);
@@ -248,11 +249,14 @@ class VoronoiCalculator : public rclcpp::Node {
                     r1_x + 0.5 * c.pts[3 * i], r1_y + 0.5 * c.pts[3 * i + 1],
                     r1_z + 0.5 * c.pts[3 * i + 2]));
               }
-              break;
+              // break;
             }
+            c.draw_gnuplot(x, y, z, f2);
+            // append separation line
+            fprintf(f2, "---\n");
           }
         } while (cla.inc());
-
+      fclose(f2);
       if (debug_) {
         utils::publishVoronoiVertices(this->now(), vertices, voronoi_frame_,
                                       voronoi_vertices_pub_);
@@ -260,21 +264,25 @@ class VoronoiCalculator : public rclcpp::Node {
 
       std::vector<double> dists(faces_vertices_.size(), 1.0);
       if (debug_acc == DEBUG_PRINT_VALUE) {
-        // utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_, true);
-        utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_, true);
+        // utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_,
+        // true);
+        utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_,
+                                               true);
         // utils::computeSphereDensity(dists, container_pdf_, cloud_, true);
       } else {
-        // utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_, false);
-        utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_, false);
+        // utils::computeMeanDistanceWithNearest(dists, container_pdf_, cloud_,
+        // false);
+        utils::computeMeanDistancesWithNearest(dists, container_pdf_, cloud_,
+                                               false);
         // utils::computeSphereDensity(dists, container_pdf_, cloud_, false);
       }
 
       for (int i = 0; i < mean_dist_with_nearest_.size(); i++) {
-
         // if (debug_) {
         //   std::cout << "Cell " << i << std::endl;
-        //   std::cout << "\tCurrent distance" << ": " << mean_dist_with_nearest_[i] << std::endl;
-        //   std::cout << "\t    New distance" << ": " << dists[i] / 0.01 << std::endl;
+        //   std::cout << "\tCurrent distance" << ": " <<
+        //   mean_dist_with_nearest_[i] << std::endl; std::cout << "\t    New
+        //   distance" << ": " << dists[i] / 0.01 << std::endl;
         // }
 
         mean_dist_with_nearest_[i] =
@@ -305,11 +313,11 @@ class VoronoiCalculator : public rclcpp::Node {
       //     std::cout << "Face " << i << ": " << pdf_coeffs_[i] << std::endl;
       //   }
       // }
-      
+
       // pdf_coeffs_[max_index] = max_value;
-      
+
       std_msgs::msg::Float64MultiArray msg;
-      
+
       // publish the pdf coefficients
       msg.data = pdf_coeffs_;
       pdf_coeffs_pub_->publish(msg);
@@ -324,27 +332,29 @@ class VoronoiCalculator : public rclcpp::Node {
                                                 tf2::TimePointZero, 10ms);
 
       std::vector<double> multipliers;
-      for(size_t i=0; i<faces_centers_.size(); i++){
+      for (size_t i = 0; i < faces_centers_.size(); i++) {
         // if (debug_) {
         //   std::cout << "i: " << i << std::endl;
-        //   std::cout << "\tpdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] << std::endl;
-        //   std::cout << "\tmean_dist_with_nearest_[" << i << "]: " << mean_dist_with_nearest_[i] << std::endl;
+        //   std::cout << "\tpdf_coeffs_[" << i << "]: " << pdf_coeffs_[i] <<
+        //   std::endl; std::cout << "\tmean_dist_with_nearest_[" << i << "]: "
+        //   << mean_dist_with_nearest_[i] << std::endl;
         // }
-        multipliers.push_back(ALPHA * (1-pdf_coeffs_[i]) + (1-ALPHA) * mean_dist_with_nearest_[i]);
+        multipliers.push_back(ALPHA * (1 - pdf_coeffs_[i]) +
+                              (1 - ALPHA) * mean_dist_with_nearest_[i]);
       }
-
-
 
       // DEBUG
       // ============================================================================================================
       ++debug_acc;
-      if (debug_acc>DEBUG_PRINT_VALUE) {
+      if (debug_acc > DEBUG_PRINT_VALUE) {
         if (debug_) {
           for (size_t i = 0; i < multipliers.size(); i++) {
-            // std::cout << "multipliers[" << i << "]: " << multipliers[i] - prev_multipliers[i] << std::endl;
-            std::cout << "multipliers[" << i << "]: " << multipliers[i] << std::endl;
+            // std::cout << "multipliers[" << i << "]: " << multipliers[i] -
+            // prev_multipliers[i] << std::endl;
+            std::cout << "multipliers[" << i << "]: " << multipliers[i]
+                      << std::endl;
           }
-        std::cout << "--------------------------------" << std::endl;
+          std::cout << "--------------------------------" << std::endl;
         }
 
         // // termination condition
@@ -359,23 +369,27 @@ class VoronoiCalculator : public rclcpp::Node {
         //   }
         // }
         // if (cond_1 && cond_2) {
-        //   std::cout << "\n\n\n" << "TERMINATION CONDITION MET\n\n" << std::endl; 
-        //   exit(0);
+        //   std::cout << "\n\n\n" << "TERMINATION CONDITION MET\n\n" <<
+        //   std::endl; exit(0);
         // }
 
         prev_multipliers = multipliers;
         debug_acc = 0;
       }
 
-      std::cout << "Difference: " << (this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 << "\n" << std::endl;
-      if ((this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 > termination_time) {
-        std::cout << "\n\n\n" << "TERMINATION CONDITION MET\n\n" << std::endl; 
+      std::cout << "Difference: "
+                << (this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9
+                << "\n"
+                << std::endl;
+      if ((this->now().nanoseconds() - start_time_.nanoseconds()) / 1e9 >
+          termination_time) {
+        std::cout << "\n\n\n"
+                  << "TERMINATION CONDITION MET\n\n"
+                  << std::endl;
         exit(0);
       }
 
       // ============================================================================================================
-
-
 
       auto res = utils::integrateVectorValuedPdfOverPolyhedron(
           vertices, container_, container_pdf_, j, multipliers);
@@ -536,7 +550,7 @@ class VoronoiCalculator : public rclcpp::Node {
   Eigen::Vector3d r1_trans_velocity_;
   rclcpp::Time last_time_;
   rclcpp::Time annealing_start_time_;
-  const double annealing_duration_ = 5.0; 
+  const double annealing_duration_ = 5.0;
   Eigen::Vector3d perturbation_;
   Eigen::Quaterniond random_quaternion_;
   bool annealing_ = false;

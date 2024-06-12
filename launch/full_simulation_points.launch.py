@@ -10,7 +10,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 import os
 
 PREFIX_LIST = ['1_', '2_']
-sim_time = True
+sim_time = False
 
 def generate_launch_description():
     # suppress the output

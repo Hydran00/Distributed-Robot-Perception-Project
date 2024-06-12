@@ -1,5 +1,5 @@
 # Distributed-Robot-Perception-Project
-![Build Humble](https://github.com/Hydran00/Distributed-Robot-Perception-Project/actions/workflows/main.yml/badge.svg)  
+<!-- ![Build Humble](https://github.com/Hydran00/Distributed-Robot-Perception-Project/actions/workflows/main.yml/badge.svg)   -->
 ### Installation
 Clone into your workspace
 ```

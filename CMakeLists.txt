@@ -84,6 +84,7 @@ INSTALL (TARGETS pointcloud_accumulator voronoi_calculator tf_publisher hull
 # python executable
 install(PROGRAMS
   scripts/vis.py
+  scripts/visualization.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
