@@ -30,3 +30,5 @@ Then open a scene between:
     ```
     ros2 run project voronoi_calculator
     ```
+
+<img src="demo.png" width="1000" height="600">
