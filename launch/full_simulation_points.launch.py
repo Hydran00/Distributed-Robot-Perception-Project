@@ -73,9 +73,9 @@ def generate_launch_description():
         # include the launch file for point clouds
     point_clouds_converter = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('ur_coppeliasim'), 'launch', 'pc2_coppeliasim.launch.py')
+            os.path.join(get_package_share_directory('project'), 'launch', 'cloud_converter.launch.py')
         ),
-        launch_arguments=[('prefixes', PREFIX_LIST),('handle_name_1','/depth1'), ('handle_name_2','/depth2')]
+        launch_arguments=[('prefixes', PREFIX_LIST)]
     )
 
     node_list = TimerAction(period=0.0,
